@@ -114,7 +114,27 @@ def _get_content(editor, initial=""):
       pass
 
 
-def do_syntax_coloring(ret, walker=None):
+syntax_colored = False
+previous_widget = None
+def do_syntax_coloring(ret, widget):
+  global previous_widget, syntax_colored
+  walker = urwid.SimpleListWalker([])
+
+  if previous_widget:
+    original_text = widget.original_widget
+    widget.original_widget = previous_widget
+    previous_widget = original_text
+
+    syntax_colored = not syntax_colored
+    return
+
+
+  # one time setup
+  previous_widget = widget.original_widget
+  listbox = urwid.ListBox(walker)
+  widget.original_widget = listbox
+  syntax_colored = True
+
   lexer = guess_lexer(ret['joined'])
 
   formatter = UrwidFormatter()
@@ -221,7 +241,7 @@ def main(stdscr):
     }
 
     if key in curses_hooks:
-      val = curses_hooks[key](ret, walker)
+      val = curses_hooks[key](ret, widget)
       if val:
         return val
 
@@ -234,7 +254,7 @@ def main(stdscr):
     wlist.append(urwid.Text(line.rstrip()))
 
   walker = urwid.SimpleListWalker(wlist)
-  widget = urwid.ListBox(walker)
+  widget = urwid.WidgetPlaceholder(urwid.ListBox(walker))
 
   loop = urwid.MainLoop(widget, palette, unhandled_input=handle_input)
   loop.run()
