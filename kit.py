@@ -215,7 +215,7 @@ class MainWindow(urwid.WidgetPlaceholder):
 
     self.overlay_opened = True
 
-  def close_overlay(self, ret, widget=None):
+  def close_overlay(self, ret=None, widget=None):
     self.original_widget = self.overlay_parent
     self.overlay_opened = False
 
@@ -250,6 +250,13 @@ def do_interactive_sed(ret, scr=None):
   pass
 
 after_urwid = []
+
+def do_close_overlay_or_quit(ret, widget):
+  if  widget.overlay_opened:
+    widget.close_overlay()
+  else:
+    raise urwid.ExitMainLoop()
+
 def do_quit(ret, scr):
   raise urwid.ExitMainLoop()
 
@@ -297,7 +304,7 @@ def main(stdscr):
     y, x = stdscr.getmaxyx()
 
     curses_hooks = {
-      "q" : do_quit,
+      "q" : do_close_overlay_or_quit,
       "s" : do_interactive_sed,
       "p" : do_print,
       "c" : do_syntax_coloring,
