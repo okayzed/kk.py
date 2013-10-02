@@ -12,7 +12,7 @@
 # open the output in an editor
 # build a command (from portions of the output?)
 # do maths with the output
-#  calculate sums 
+#  calculate sums
 #  pivot tables
 
 
@@ -27,7 +27,13 @@ import urwid
 
 import pygments
 import pygments.formatters
+from urwidpygments import UrwidFormatter
 from pygments.lexers import guess_lexer
+
+
+debugfile = open("debug", "w")
+def debug(msg):
+  print >> debugfile, msg
 
 def read_lines(stdscr):
   maxx = 0
@@ -78,13 +84,14 @@ def read_lines(stdscr):
 
 "http://yahoo.com"
 
-def do_syntax_coloring(ret, scr=None):
-  def func():
-    lexer = guess_lexer(ret['joined'])
-    output = pygments.highlight(ret['joined'], lexer, pygments.formatters.Terminal256Formatter())
-    print output
-  after_urwid.append(func)
-  raise urwid.ExitMainLoop()
+def do_syntax_coloring(ret, walker=None):
+  lexer = guess_lexer(ret['joined'])
+  formatter = UrwidFormatter()
+  tokens = lexer.get_tokens(ret['joined'])
+  formatted_tokens = list(formatter.formatgenerator(tokens))
+  debug(formatted_tokens)
+
+  walker[:] = [ urwid.Text(formatted_tokens) ]
 
 
 def do_get_urls(ret, scr=None):
@@ -115,8 +122,18 @@ def show_or_exit(key):
   if key in ('q', 'Q'):
     raise urwid.ExitMainLoop()
 
+
+palette = [
+  ('banner', 'black', 'light gray'),
+  ('streak', 'black', 'dark red'),
+  ('bg', 'black', 'dark blue'),
+]
+
 def main(stdscr):
   ret = read_lines(stdscr)
+  widget = None
+  walker = None
+
 
   # We're done with stdin,
   # now we want to read input from current terminal
@@ -135,16 +152,27 @@ def main(stdscr):
     }
 
     if key in curses_hooks:
-      val = curses_hooks[key](ret, stdscr)
+      val = curses_hooks[key](ret, walker)
       if val:
         return val
 
   wlist = []
   for line in ret["lines"]:
-    wlist.append(urwid.Text(line.rstrip()))
-  widget = urwid.ListBox(wlist)
+    col = 0
+    stripped = line.lstrip()
+    col = len(line) - len(stripped)
 
-  loop = urwid.MainLoop(widget, unhandled_input=handle_input)
+    if col < len(line):
+      fc = line[col]
+      words = [' ' * col, ('banner', fc), stripped[1:].rstrip()]
+      wlist.append(urwid.Text(words))
+    else:
+      wlist.append(urwid.Text(''))
+
+  walker = urwid.SimpleListWalker(wlist)
+  widget = urwid.ListBox(walker)
+
+  loop = urwid.MainLoop(widget, palette, unhandled_input=handle_input)
   loop.run()
 
 if __name__ == "__main__":
