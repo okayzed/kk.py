@@ -26,23 +26,23 @@ import pygments.formatters
 from urwidpygments import UrwidFormatter
 from pygments.lexers import guess_lexer
 
-updatedMappings = {
-  'k':        'cursor up',
-  'j':      'cursor down',
-  'h':      'cursor left',
-  'l':     'cursor right',
-  'ctrl u':   'cursor page up',
-  'ctrl d': 'cursor page down'
-}
+def add_vim_movement():
+  updatedMappings = {
+    'k':        'cursor up',
+    'j':      'cursor down',
+    'h':      'cursor left',
+    'l':     'cursor right',
+    'ctrl u':   'cursor page up',
+    'ctrl d': 'cursor page down'
+  }
 
-for key in updatedMappings:
-  urwid.command_map[key] = updatedMappings[key]
-
+  for key in updatedMappings:
+    urwid.command_map[key] = updatedMappings[key]
 
 
 debugfile = open(__name__ + ".debug", "w")
-def debug(msg):
-  print >> debugfile, msg
+def debug(*args):
+  print >> debugfile, " ".join([str(i) for i in args])
 
 
 # {{{ read input
@@ -276,10 +276,6 @@ def do_edit_text(ret, widget):
   ret['lines'] = lines
   ret['joined'] = ''.join(lines)
 
-def do_move_forward(ret, widget):
-  obj, index = widget.original_widget.get_focus()
-  widget.original_widget.set_focus(index + 1)
-
 # }}}
 
 # {{{ display input
@@ -326,7 +322,6 @@ def main(stdscr):
       "c" : do_syntax_coloring,
       "u" : do_get_urls,
       "e" : do_edit_text,
-      "j" : do_move_forward,
       "esc" : widget.close_overlay
     }
 
@@ -336,10 +331,12 @@ def main(stdscr):
         return val
 
 
+  add_vim_movement()
   widget = OverlayStack(urwid.Text(""))
+  frame = urwid.Frame(widget)
   display_lines(ret["lines"], widget)
 
-  loop = urwid.MainLoop(widget, palette, unhandled_input=handle_input)
+  loop = urwid.MainLoop(frame, palette, unhandled_input=handle_input)
   loop.run()
 
 if __name__ == "__main__":
