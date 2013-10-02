@@ -1,6 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: latin-1 -*-
 
+# The kitchen sink is a smarter pager. It lets you operate on any output and quickly take action
+
+# things the kitchen sink could potentially do:
+
+# add syntax highlighting to any output
+# locate (and open) files in the output
+# locate (and open) urls in the output
+# compare two different outputs (do ad-hoc diffs)
+# open the output in an editor
+# build a command (from portions of the output?)
+# do maths with the output
+#  calculate sums 
+#  pivot tables
+
+
 
 import curses
 import itertools
@@ -8,7 +23,7 @@ import os
 import sys
 import time
 import urlparse
-
+import urwid
 
 import pygments
 import pygments.formatters
@@ -32,14 +47,10 @@ def read_lines(stdscr):
   # maybe highlight specific ones? #www.yahoo.com
 
 
+  # http://redd.it
   all_tokens = []
   for index, line in enumerate(lines):
     col = 0
-    try:
-      stdscr.addstr(index, 0, line)
-
-    except Exception, e:
-      print e
 
     while line[col] == " ":
       col += 1
@@ -68,29 +79,43 @@ def read_lines(stdscr):
 "http://yahoo.com"
 
 def do_syntax_coloring(ret, scr=None):
-  lexer = guess_lexer(ret['joined'])
-  output = pygments.highlight(ret['joined'], lexer, pygments.formatters.Terminal256Formatter())
-  print output
+  def func():
+    lexer = guess_lexer(ret['joined'])
+    output = pygments.highlight(ret['joined'], lexer, pygments.formatters.Terminal256Formatter())
+    print output
+  after_urwid.append(func)
+  raise urwid.ExitMainLoop()
 
 
 def do_get_urls(ret, scr=None):
   tokens = ret['tokens']
-  urls = []
-  import re
-  for token in tokens:
-    match = re.search("^\W*(https?://[\w\.]*|www.[\w\.]*)", token['text'])
-    if match:
-      urls.append(match.group(1))
 
-  print '\n'.join(urls)
+  def func():
+    urls = []
+    import re
+    for token in tokens:
+      match = re.search("^\W*(https?://[\w\.]*|www.[\w\.]*)", token['text'])
+      if match:
+        urls.append(match.group(1))
 
-  return True
+    print '\n'.join(urls)
 
+  after_urwid.append(func)
+  raise urwid.ExitMainLoop()
+
+def do_interactive_sed(ret, scr=None):
+  pass
+
+after_urwid = []
 def do_quit(ret, scr):
-  return True
+  raise urwid.ExitMainLoop()
+
+
+def show_or_exit(key):
+  if key in ('q', 'Q'):
+    raise urwid.ExitMainLoop()
 
 def main(stdscr):
-  stdscr.erase()
   ret = read_lines(stdscr)
 
   # We're done with stdin,
@@ -98,42 +123,35 @@ def main(stdscr):
   with open("/dev/tty") as f:
     os.dup2(f.fileno(), 0)
 
-  y, x = stdscr.getmaxyx()
+  def handle_input(key):
+    key = key.lower()
+    y, x = stdscr.getmaxyx()
 
-  stdscr.refresh()
-  ch = -1
+    curses_hooks = {
+      "q" : do_quit,
+      "s" : do_interactive_sed,
+      "c" : do_syntax_coloring,
+      "u" : do_get_urls
+    }
 
+    if key in curses_hooks:
+      val = curses_hooks[key](ret, stdscr)
+      if val:
+        return val
 
-  pre_curses_hooks = {
-    "q" : do_quit
-  }
-  post_curses_hooks = {
-    "s" : do_syntax_coloring,
-    "u" : do_get_urls
-  }
+  wlist = []
+  for line in ret["lines"]:
+    wlist.append(urwid.Text(line.rstrip()))
+  widget = urwid.ListBox(wlist)
 
-  while True:
-    ch = stdscr.getch()
-    if ch != -1:
-      key = str(unichr(ch))
-
-    if key in pre_curses_hooks:
-      ret = pre_curses_hooks[key](ret, stdscr)
-      if ret:
-        return ret
-
-    if key in post_curses_hooks:
-      def func():
-        post_curses_hooks[key](ret)
-
-      return func
-
-  return func
+  loop = urwid.MainLoop(widget, unhandled_input=handle_input)
+  loop.run()
 
 if __name__ == "__main__":
-  after = curses.wrapper(main)
-  if hasattr(after, '__call__'):
-    try:
-      after()
-    except Exception, e:
-      raise e
+  curses.wrapper(main)
+  for after in after_urwid:
+    if hasattr(after, '__call__'):
+      try:
+        after()
+      except Exception, e:
+        raise e
