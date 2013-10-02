@@ -11,18 +11,7 @@
 # compare two different outputs (do ad-hoc diffs)
 # open the output in an editor
 # build a command (from portions of the output?)
-# do maths with the output
-#  calculate sums
-#  pivot tables
-
-
-
-
-# Things that will be useful in this UI
-#   modal overlay stack
-#
-
-
+# yank the output into a 'buffer'
 
 import curses
 import itertools
@@ -37,11 +26,26 @@ import pygments.formatters
 from urwidpygments import UrwidFormatter
 from pygments.lexers import guess_lexer
 
+updatedMappings = {
+  'k':        'cursor up',
+  'j':      'cursor down',
+  'h':      'cursor left',
+  'l':     'cursor right',
+  'ctrl u':   'cursor page up',
+  'ctrl d': 'cursor page down'
+}
+
+for key in updatedMappings:
+  urwid.command_map[key] = updatedMappings[key]
+
+
 
 debugfile = open(__name__ + ".debug", "w")
 def debug(msg):
   print >> debugfile, msg
 
+
+# {{{ read input
 def read_lines(lines=None):
   maxx = 0
   numlines = 0
@@ -92,11 +96,10 @@ def read_lines(lines=None):
 
 "http://yahoo.com"
 
+# }}}
 
 
-
-
-# http://stackoverflow.com/questions/2576956/getting-data-from-external-program
+# {{{ http://stackoverflow.com/questions/2576956/getting-data-from-external-program
 def _get_content(editor, initial=""):
     from subprocess import call
     from tempfile import NamedTemporaryFile
@@ -118,8 +121,44 @@ def _get_content(editor, initial=""):
         result = f.readlines()
         os.remove(tfName)
         return result
+# }}}
 
+# {{{ Overlay Stack
+class OverlayStack(urwid.WidgetPlaceholder):
+  def __init__(self, *args, **kwargs):
+    super(OverlayStack, self).__init__(*args, **kwargs)
+    self.overlay_opened = False
 
+  def open_overlay(self, widget, **options):
+    if not self.overlay_opened:
+      defaults = {
+        "align" : "center",
+        "width" : ("relative", 50),
+        "valign" : "middle",
+        "height" : ("relative", 50)
+      }
+      defaults.update(options)
+
+      overlay = urwid.Overlay(
+        widget,
+        self.original_widget,
+        **defaults
+      )
+
+      self.overlay_parent = self.original_widget
+      self.overlay = overlay
+
+      self.original_widget = self.overlay
+
+    self.overlay_opened = True
+
+  def close_overlay(self, ret=None, widget=None):
+    self.original_widget = self.overlay_parent
+    self.overlay_opened = False
+
+# }}}
+
+# {{{ character handlers
 syntax_colored = False
 previous_widget = None
 def do_syntax_coloring(ret, widget):
@@ -187,38 +226,6 @@ def do_syntax_coloring(ret, widget):
 
     walker[:] = [ urwid.Text(list(formatted_tokens)) ]
 
-class MainWindow(urwid.WidgetPlaceholder):
-  def __init__(self, *args, **kwargs):
-    super(MainWindow, self).__init__(*args, **kwargs)
-    self.overlay_opened = False
-
-  def open_overlay(self, widget, **options):
-    if not self.overlay_opened:
-      defaults = {
-        "align" : "center",
-        "width" : ("relative", 50),
-        "valign" : "middle",
-        "height" : ("relative", 50)
-      }
-      defaults.update(options)
-
-      overlay = urwid.Overlay(
-        widget,
-        self.original_widget,
-        **defaults
-      )
-
-      self.overlay_parent = self.original_widget
-      self.overlay = overlay
-
-      self.original_widget = self.overlay
-
-    self.overlay_opened = True
-
-  def close_overlay(self, ret=None, widget=None):
-    self.original_widget = self.overlay_parent
-    self.overlay_opened = False
-
 def do_get_urls(ret, widget=None):
   tokens = ret['tokens']
 
@@ -250,7 +257,6 @@ def do_interactive_sed(ret, scr=None):
   pass
 
 after_urwid = []
-
 def do_close_overlay_or_quit(ret, widget):
   if  widget.overlay_opened:
     widget.close_overlay()
@@ -270,11 +276,19 @@ def do_edit_text(ret, widget):
   ret['lines'] = lines
   ret['joined'] = ''.join(lines)
 
+def do_move_forward(ret, widget):
+  obj, index = widget.original_widget.get_focus()
+  widget.original_widget.set_focus(index + 1)
+
+# }}}
+
+# {{{ display input
 palette = [
   ('banner', 'black', 'light gray'),
   ('streak', 'black', 'dark red'),
   ('bg', 'black', 'dark blue'),
 ]
+
 
 def display_lines(lines, widget):
   wlist = []
@@ -288,6 +302,8 @@ def display_lines(lines, widget):
   walker = urwid.SimpleListWalker(wlist)
   text = urwid.ListBox(walker)
   widget.original_widget = text
+
+# }}}
 
 def main(stdscr):
   ret = read_lines(stdscr)
@@ -310,6 +326,7 @@ def main(stdscr):
       "c" : do_syntax_coloring,
       "u" : do_get_urls,
       "e" : do_edit_text,
+      "j" : do_move_forward,
       "esc" : widget.close_overlay
     }
 
@@ -319,7 +336,7 @@ def main(stdscr):
         return val
 
 
-  widget = MainWindow(urwid.Text(""))
+  widget = OverlayStack(urwid.Text(""))
   display_lines(ret["lines"], widget)
 
   loop = urwid.MainLoop(widget, palette, unhandled_input=handle_input)
