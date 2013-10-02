@@ -5,13 +5,15 @@
 
 # things the kitchen sink could potentially do:
 
-# add syntax highlighting to any output
-# locate (and open) files in the output
-# locate (and open) urls in the output
-# compare two different outputs (do ad-hoc diffs)
-# open the output in an editor
-# build a command (from portions of the output?)
-# yank the output into a 'buffer'
+# o locate (and open) files in the output
+# o compare two different outputs (do ad-hoc diffs)
+# o build a command (from portions of the output?)
+# o yank the output into a 'buffer'
+# o open urls from the output
+# x add syntax highlighting to any output
+# x add syntax highlighting to git diffs
+# x open the output in an editor
+# x locate urls in the output
 
 import curses
 import itertools
@@ -246,7 +248,7 @@ def do_get_urls(ret, widget=None):
   widget.open_overlay(url_window)
 
 
-def do_print(ret, scr):
+def do_pipe(ret, scr):
   def func():
     print ret['joined']
 
@@ -275,6 +277,78 @@ def do_edit_text(ret, widget):
   display_lines(lines, widget)
   ret['lines'] = lines
   ret['joined'] = ''.join(lines)
+
+def do_yank_text(ret, widget):
+  success = urwid.Text("Success")
+  listbox = urwid.ListBox([success])
+
+  widget.open_overlay(urwid.LineBox(listbox), height=3)
+
+def do_diff_text(ret, widget):
+  pass
+
+def do_open_help(ret, widget):
+  listitems = []
+
+  helps = []
+  shortcuts = []
+  for item in CURSES_HOOKS:
+    msg = CURSES_HOOKS[item].get('help')
+    if msg:
+      shortcut = urwid.Text(('banner', item))
+      shortcut.align = "right"
+      help_msg = urwid.Text(msg + "  ")
+      help_msg.align = "right"
+
+      columns = urwid.Columns([ ("fixed", 3, shortcut), ("weight", 90, help_msg)])
+      listitems.append(columns)
+
+  listbox = urwid.ListBox(listitems)
+  widget.open_overlay(urwid.LineBox(listbox), 
+    width=("relative", 80), height=("relative", 80))
+
+CURSES_HOOKS = {
+  "q" : {
+    "fn" : do_close_overlay_or_quit,
+    "help" : "Quit kit / Close current overlay"
+  },
+  "s" : {
+    "fn" : do_interactive_sed,
+    "help" : "Open interactive sed editor"
+  },
+  "p" : {
+    "fn" : do_pipe,
+    "help" : "Pipe kits window to another command"
+  },
+  "c" : {
+    "fn" : do_syntax_coloring,
+    "help" : "turn on syntax highlights"
+  },
+  "u" : {
+    "fn" : do_get_urls,
+    "help" : "dump the URLs from the current buffer"
+  },
+  "e" : {
+    "fn" : do_edit_text,
+    "help" : "open the current text in $EDITOR"
+  },
+  "y" : {
+    "fn" : do_yank_text,
+    "help" : "save the current kit output for later use"
+  },
+  "d" : {
+    "fn" : do_diff_text,
+    "help" : "compare the current kit session against a previous session"
+  },
+  "?" : {
+    "fn" : do_open_help,
+    "help" : "show this screen"
+  },
+  "esc" : {
+    "fn" : do_close_overlay_or_quit,
+    "help" : "Close kit / Close current overlay"
+  },
+}
 
 # }}}
 
@@ -315,28 +389,17 @@ def main(stdscr):
 
     y, x = stdscr.getmaxyx()
 
-    curses_hooks = {
-      "q" : do_close_overlay_or_quit,
-      "s" : do_interactive_sed,
-      "p" : do_print,
-      "c" : do_syntax_coloring,
-      "u" : do_get_urls,
-      "e" : do_edit_text,
-      "esc" : widget.close_overlay
-    }
-
-    if key in curses_hooks:
-      val = curses_hooks[key](ret, widget)
+    if key in CURSES_HOOKS:
+      val = CURSES_HOOKS[key]['fn'](ret, widget)
       if val:
         return val
 
 
   add_vim_movement()
   widget = OverlayStack(urwid.Text(""))
-  frame = urwid.Frame(widget)
   display_lines(ret["lines"], widget)
 
-  loop = urwid.MainLoop(frame, palette, unhandled_input=handle_input)
+  loop = urwid.MainLoop(widget, palette, unhandled_input=handle_input)
   loop.run()
 
 if __name__ == "__main__":
