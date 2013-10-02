@@ -52,11 +52,14 @@ def read_lines(lines=None):
   maxx = 0
   numlines = 0
   lines = []
+  content = False
 
   for line in (lines or sys.stdin):
     maxx = max(maxx, len(line))
     numlines += 1
     lines.append(line)
+    if not content and line.strip() != "":
+      content = True
 
   maxy = numlines
 
@@ -90,7 +93,8 @@ def read_lines(lines=None):
     "maxy": maxy,
     "lines": lines,
     "joined" : joined,
-    "tokens" : all_tokens
+    "tokens" : all_tokens,
+    "has_content" : content
   }
 
 
@@ -377,7 +381,6 @@ def display_lines(lines, widget):
 
 def main(stdscr):
   ret = read_lines(stdscr)
-
   # We're done with stdin,
   # now we want to read input from current terminal
   with open("/dev/tty") as f:
@@ -400,7 +403,9 @@ def main(stdscr):
   display_lines(ret["lines"], widget)
 
   loop = urwid.MainLoop(widget, palette, unhandled_input=handle_input)
-  loop.run()
+  if ret['has_content']:
+    loop.run()
+
 
 if __name__ == "__main__":
   curses.wrapper(main)
