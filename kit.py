@@ -198,6 +198,13 @@ def do_get_urls(ret, scr=None):
   after_urwid.append(func)
   raise urwid.ExitMainLoop()
 
+def do_print(ret, scr):
+  def func():
+    print ret['joined']
+
+  after_urwid.append(func)
+  raise urwid.ExitMainLoop()
+
 def do_interactive_sed(ret, scr=None):
   pass
 
@@ -235,6 +242,7 @@ def main(stdscr):
     curses_hooks = {
       "q" : do_quit,
       "s" : do_interactive_sed,
+      "p" : do_print,
       "c" : do_syntax_coloring,
       "u" : do_get_urls,
       "e" : do_edit_text
