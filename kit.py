@@ -84,6 +84,36 @@ def read_lines(stdscr):
 
 "http://yahoo.com"
 
+
+
+
+
+# http://stackoverflow.com/questions/2576956/getting-data-from-external-program
+def _get_content(editor, initial=""):
+    from subprocess import call
+    from tempfile import NamedTemporaryFile
+
+    # Create the initial temporary file.
+    with NamedTemporaryFile(delete=False) as tf:
+        tfName = tf.name
+        debug("opening file in editor:" + str(tfName))
+        tf.write(initial)
+
+    # Fire up the editor.
+    if call([editor, tfName]) != 0:
+        return None # Editor died or was killed.
+
+    # Get the modified content.
+
+
+    try:
+      with open(tfName).readlines() as result:
+          os.remove(tfName)
+          return result
+    except:
+      pass
+
+
 def do_syntax_coloring(ret, walker=None):
   lexer = guess_lexer(ret['joined'])
   formatter = UrwidFormatter()
@@ -116,11 +146,9 @@ after_urwid = []
 def do_quit(ret, scr):
   raise urwid.ExitMainLoop()
 
-
-def show_or_exit(key):
-  if key in ('q', 'Q'):
-    raise urwid.ExitMainLoop()
-
+def do_edit_text(ret, widget):
+  _get_content(os.environ["EDITOR"], ret["joined"])
+  raise urwid.ExitMainLoop()
 
 palette = [
   ('banner', 'black', 'light gray'),
@@ -140,14 +168,17 @@ def main(stdscr):
     os.dup2(f.fileno(), 0)
 
   def handle_input(key):
-    key = key.lower()
+    if type(key) == str:
+      key = key.lower()
+
     y, x = stdscr.getmaxyx()
 
     curses_hooks = {
       "q" : do_quit,
       "s" : do_interactive_sed,
       "c" : do_syntax_coloring,
-      "u" : do_get_urls
+      "u" : do_get_urls,
+      "e" : do_edit_text
     }
 
     if key in curses_hooks:
@@ -161,12 +192,7 @@ def main(stdscr):
     stripped = line.lstrip()
     col = len(line) - len(stripped)
 
-    if col < len(line):
-      fc = line[col]
-      words = [' ' * col, ('banner', fc), stripped[1:].rstrip()]
-      wlist.append(urwid.Text(words))
-    else:
-      wlist.append(urwid.Text(''))
+    wlist.append(urwid.Text(line.rstrip()))
 
   walker = urwid.SimpleListWalker(wlist)
   widget = urwid.ListBox(walker)
