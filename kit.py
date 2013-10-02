@@ -20,7 +20,7 @@
 
 # Things that will be useful in this UI
 #   modal overlay stack
-# 
+#
 
 
 
@@ -42,11 +42,12 @@ debugfile = open(__name__ + ".debug", "w")
 def debug(msg):
   print >> debugfile, msg
 
-def read_lines(stdscr):
+def read_lines(lines=None):
   maxx = 0
   numlines = 0
   lines = []
-  for line in sys.stdin:
+
+  for line in (lines or sys.stdin):
     maxx = max(maxx, len(line))
     numlines += 1
     lines.append(line)
@@ -100,6 +101,7 @@ def _get_content(editor, initial=""):
     from subprocess import call
     from tempfile import NamedTemporaryFile
 
+    tfName = None
     # Create the initial temporary file.
     with NamedTemporaryFile(delete=False) as tf:
         tfName = tf.name
@@ -107,18 +109,15 @@ def _get_content(editor, initial=""):
         tf.write(initial)
 
     # Fire up the editor.
-    if call([editor, tfName]) != 0:
+    code = call([editor, tfName])
+    if code != 0:
         return None # Editor died or was killed.
 
     # Get the modified content.
-
-
-    try:
-      with open(tfName).readlines() as result:
-          os.remove(tfName)
-          return result
-    except:
-      pass
+    with open(tfName, "r") as f:
+        result = f.readlines()
+        os.remove(tfName)
+        return result
 
 
 syntax_colored = False
@@ -255,8 +254,14 @@ def do_quit(ret, scr):
   raise urwid.ExitMainLoop()
 
 def do_edit_text(ret, widget):
-  _get_content(os.environ["EDITOR"], ret["joined"])
-  raise urwid.ExitMainLoop()
+  global previous_widget, syntax_colored
+
+  lines = _get_content(os.environ["EDITOR"], ret["joined"])
+  previous_widget = None
+  syntax_colored = False
+  display_lines(lines, widget)
+  ret['lines'] = lines
+  ret['joined'] = ''.join(lines)
 
 palette = [
   ('banner', 'black', 'light gray'),
@@ -264,12 +269,21 @@ palette = [
   ('bg', 'black', 'dark blue'),
 ]
 
+def display_lines(lines, widget):
+  wlist = []
+  for line in lines:
+    col = 0
+    stripped = line.lstrip()
+    col = len(line) - len(stripped)
+
+    wlist.append(urwid.Text(line.rstrip()))
+
+  walker = urwid.SimpleListWalker(wlist)
+  text = urwid.ListBox(walker)
+  widget.original_widget = text
+
 def main(stdscr):
   ret = read_lines(stdscr)
-  widget = None
-  text = None
-  walker = None
-
 
   # We're done with stdin,
   # now we want to read input from current terminal
@@ -297,17 +311,9 @@ def main(stdscr):
       if val:
         return val
 
-  wlist = []
-  for line in ret["lines"]:
-    col = 0
-    stripped = line.lstrip()
-    col = len(line) - len(stripped)
 
-    wlist.append(urwid.Text(line.rstrip()))
-
-  walker = urwid.SimpleListWalker(wlist)
-  text = urwid.ListBox(walker)
-  widget = MainWindow(text)
+  widget = MainWindow(urwid.Text(""))
+  display_lines(ret["lines"], widget)
 
   loop = urwid.MainLoop(widget, palette, unhandled_input=handle_input)
   loop.run()
