@@ -17,6 +17,13 @@
 
 
 
+
+# Things that will be useful in this UI
+#   modal overlay stack
+# 
+
+
+
 import curses
 import itertools
 import os
@@ -181,22 +188,57 @@ def do_syntax_coloring(ret, widget):
 
     walker[:] = [ urwid.Text(list(formatted_tokens)) ]
 
+class MainWindow(urwid.WidgetPlaceholder):
+  def __init__(self, *args, **kwargs):
+    super(MainWindow, self).__init__(*args, **kwargs)
+    self.overlay_opened = False
 
-def do_get_urls(ret, scr=None):
+  def open_overlay(self, widget, **options):
+    if not self.overlay_opened:
+      defaults = {
+        "align" : "center",
+        "width" : ("relative", 50),
+        "valign" : "middle",
+        "height" : ("relative", 50)
+      }
+      defaults.update(options)
+
+      overlay = urwid.Overlay(
+        widget,
+        self.original_widget,
+        **defaults
+      )
+
+      self.overlay_parent = self.original_widget
+      self.overlay = overlay
+
+      self.original_widget = self.overlay
+
+    self.overlay_opened = True
+
+  def close_overlay(self, ret, widget=None):
+    self.original_widget = self.overlay_parent
+    self.overlay_opened = False
+
+def do_get_urls(ret, widget=None):
   tokens = ret['tokens']
 
-  def func():
-    urls = []
-    import re
-    for token in tokens:
-      match = re.search("^\W*(https?://[\w\.]*|www.[\w\.]*)", token['text'])
-      if match:
-        urls.append(match.group(1))
+  urls = []
+  import re
+  for token in tokens:
+    match = re.search("^\W*(https?://[\w\.]*|www.[\w\.]*)", token['text'])
+    if match:
+      urls.append(match.group(1))
 
-    print '\n'.join(urls)
 
-  after_urwid.append(func)
-  raise urwid.ExitMainLoop()
+  if not len(urls):
+    urls.append("No URLS found in document")
+
+  walker = urwid.SimpleListWalker([urwid.Text(url) for url in urls])
+  listbox = urwid.ListBox(walker)
+  url_window = urwid.LineBox(listbox)
+  widget.open_overlay(url_window)
+
 
 def do_print(ret, scr):
   def func():
@@ -225,6 +267,7 @@ palette = [
 def main(stdscr):
   ret = read_lines(stdscr)
   widget = None
+  text = None
   walker = None
 
 
@@ -245,7 +288,8 @@ def main(stdscr):
       "p" : do_print,
       "c" : do_syntax_coloring,
       "u" : do_get_urls,
-      "e" : do_edit_text
+      "e" : do_edit_text,
+      "esc" : widget.close_overlay
     }
 
     if key in curses_hooks:
@@ -262,7 +306,8 @@ def main(stdscr):
     wlist.append(urwid.Text(line.rstrip()))
 
   walker = urwid.SimpleListWalker(wlist)
-  widget = urwid.WidgetPlaceholder(urwid.ListBox(walker))
+  text = urwid.ListBox(walker)
+  widget = MainWindow(text)
 
   loop = urwid.MainLoop(widget, palette, unhandled_input=handle_input)
   loop.run()
