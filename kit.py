@@ -31,7 +31,7 @@ from urwidpygments import UrwidFormatter
 from pygments.lexers import guess_lexer
 
 
-debugfile = open("debug", "w")
+debugfile = open(__name__ + ".debug", "w")
 def debug(msg):
   print >> debugfile, msg
 
@@ -88,10 +88,9 @@ def do_syntax_coloring(ret, walker=None):
   lexer = guess_lexer(ret['joined'])
   formatter = UrwidFormatter()
   tokens = lexer.get_tokens(ret['joined'])
-  formatted_tokens = list(formatter.formatgenerator(tokens))
-  debug(formatted_tokens)
+  formatted_tokens = formatter.formatgenerator(tokens)
 
-  walker[:] = [ urwid.Text(formatted_tokens) ]
+  walker[:] = [ urwid.Text(list(formatted_tokens)) ]
 
 
 def do_get_urls(ret, scr=None):
