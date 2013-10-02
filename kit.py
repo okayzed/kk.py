@@ -122,8 +122,7 @@ def do_syntax_coloring(ret, walker=None):
   output = ret['joined']
   # special case for git diffs
   if ret['joined'].find("diff --git") >= 0:
-    debug("GIT DIFF")
-    walker[:] = [ urwid.Text('') ]
+    walker[:] = [ ]
     wlines = []
     lexer = None
     fname = None
@@ -156,7 +155,6 @@ def do_syntax_coloring(ret, walker=None):
 
     pass
   else:
-    debug("REGULAR")
     # otherwise, just try and highlight the whole text at once
     tokens = lexer.get_tokens(output)
     formatted_tokens = formatter.formatgenerator(tokens)
