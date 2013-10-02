@@ -116,11 +116,52 @@ def _get_content(editor, initial=""):
 
 def do_syntax_coloring(ret, walker=None):
   lexer = guess_lexer(ret['joined'])
-  formatter = UrwidFormatter()
-  tokens = lexer.get_tokens(ret['joined'])
-  formatted_tokens = formatter.formatgenerator(tokens)
 
-  walker[:] = [ urwid.Text(list(formatted_tokens)) ]
+  formatter = UrwidFormatter()
+  lines = ret['lines']
+  output = ret['joined']
+  # special case for git diffs
+  if ret['joined'].find("diff --git") >= 0:
+    debug("GIT DIFF")
+    walker[:] = [ urwid.Text('') ]
+    wlines = []
+    lexer = None
+    fname = None
+    for line in lines:
+      if line.startswith("diff --git"):
+
+        # previous output
+        if fname:
+          output = "".join(wlines)
+
+          try:
+            lexer = pygments.lexers.guess_lexer_for_filename(fname, output)
+          except:
+            lexer = guess_lexer(output)
+          tokens = lexer.get_tokens(output)
+          formatted_tokens = formatter.formatgenerator(tokens)
+          walker.append(urwid.Text(list(formatted_tokens)))
+
+        # next output
+        fname = line.split().pop()
+        wlines = [ ]
+
+      wlines.append(line)
+
+    if wlines:
+      lexer = pygments.lexers.guess_lexer_for_filename(fname, "\n".join(wlines))
+      tokens = lexer.get_tokens(output)
+      formatted_tokens = formatter.formatgenerator(tokens)
+      walker.append(urwid.Text(list(formatted_tokens)))
+
+    pass
+  else:
+    debug("REGULAR")
+    # otherwise, just try and highlight the whole text at once
+    tokens = lexer.get_tokens(output)
+    formatted_tokens = formatter.formatgenerator(tokens)
+
+    walker[:] = [ urwid.Text(list(formatted_tokens)) ]
 
 
 def do_get_urls(ret, scr=None):
