@@ -22,11 +22,13 @@ fi
 if [[ ${SUCCESS} = 1 ]]; then
   sed -i '/^\s*alias.*python.*kit\.py.*$/d' ${HOME}/${FILE}
   echo "alias 'kk'='python $PATH_TO_KIT/kit.py'" >> ${HOME}/${FILE}
-  alias 'kk'='python $PATH_TO_KIT/kit.py'
 
-  echo "
-Installed the kitchen sink pager as an alias in ${HOME}/${FILE} to 
-${PATH_TO_KIT}
+  echo "Installed the kitchen sink pager as an alias in ${HOME}/${FILE} to 
+${PATH_TO_KIT}."
 
-Note: If the location of this directory changes, update the alias or rerun this installer."
+  echo ""
+  echo "The next time you log in, 'kk' will be your kitchen sink pager"
+  echo "If you want to use kk immediately, reload your $FILE with 'source ~/${FILE}'"
+  echo ""
+  echo "Note: If the location of this directory changes, update the alias or rerun this installer."
 fi
