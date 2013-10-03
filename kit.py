@@ -1,20 +1,25 @@
 #!/usr/bin/env python
 # -*- coding: latin-1 -*-
 
+# {{{ about
 # The kitchen sink is a smarter pager. It lets you operate on any output and quickly take action
 
 # things the kitchen sink could potentially do:
 
-# o locate (and open) files in the output
 # o compare two different outputs (do ad-hoc diffs)
 # o build a command (from portions of the output?)
 # o yank the output into a 'buffer'
-# o open urls from the output
+
+# x locate (and open) files in the output
+# x open urls from the output
 # x add syntax highlighting to any output
 # x add syntax highlighting to git diffs
-# x open the output in an editor
+# x open the output in an external editor
 # x locate urls in the output
 
+# }}}
+
+# {{{ imports
 import curses
 import itertools
 import os
@@ -28,6 +33,7 @@ import pygments
 import pygments.formatters
 from urwidpygments import UrwidFormatter
 from pygments.lexers import guess_lexer
+# }}}
 
 # {{{ util
 def add_vim_movement():
@@ -50,7 +56,7 @@ def debug(*args):
 
 # }}}
 
-# {{{ read input
+# {{{ input
 def tokenize(lines):
   # http://redd.it
   all_tokens = []
@@ -115,7 +121,7 @@ def read_lines(in_lines=None):
 
 # }}}
 
-# {{{ external editor callout
+# {{{ external editor
 # http://stackoverflow.com/questions/2576956/getting-data-from-external-program
 def _get_content(editor, initial=""):
     from subprocess import call
@@ -140,7 +146,7 @@ def _get_content(editor, initial=""):
         return result
 # }}}
 
-# {{{ Overlay Stack
+# {{{ overlay widget
 class OverlayStack(urwid.WidgetPlaceholder):
   def __init__(self, *args, **kwargs):
     super(OverlayStack, self).__init__(*args, **kwargs)
@@ -238,7 +244,6 @@ def do_syntax_coloring(kv, ret, widget):
 
     for line in ret['lines']:
       if line.startswith("diff --git"):
-
         output = "".join(wlines)
 
         add_lines_to_walker(wlines, walker, fname)
@@ -544,7 +549,7 @@ def display_lines(lines, widget):
 
 # }}}
 
-# {{{ Viewer class
+# {{{ main viewer class
 
 
 _key_hooks = CURSES_HOOKS
