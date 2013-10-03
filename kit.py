@@ -7,8 +7,11 @@
 # things the kitchen sink could potentially do:
 
 # o compare two different outputs (do ad-hoc diffs)
-# o build a command (from portions of the output?)
+# o pipe buffer into a command and re-open pager
 # o yank the output into a 'buffer'
+# o search + next / prev functions
+# o sum a column
+# o sum a row
 
 # x locate (and open) files in the output
 # x open urls from the output
@@ -192,6 +195,7 @@ class OverlayStack(urwid.WidgetPlaceholder):
 # }}}
 
 # {{{ character handlers
+
 syntax_colored = False
 previous_widget = None
 def do_syntax_coloring(kv, ret, widget):
@@ -367,6 +371,12 @@ def do_yank_text(kv, ret, widget):
 def do_diff_text(kv, ret, widget):
   pass
 
+def do_next_search(kv, ret, widget):
+  kv.find_and_focus()
+
+def do_prev_search(kv, ret, widget):
+  kv.display_status_msg("Reverse search is yet unimplemented")
+
 def do_scroll_top(kv, ret, widget):
   widget.original_widget.set_focus_valign('top')
   widget.original_widget.set_focus(0)
@@ -390,6 +400,8 @@ def do_command_prompt(kv, ret, widget):
 
 def handle_command(prompt, command):
   debug("Handling command", prompt, command)
+  if prompt == '/':
+    kv.find_and_focus(command)
 
 def do_command_entered(kv, ret, widget):
   if kv.in_command_prompt:
@@ -462,6 +474,14 @@ CURSES_HOOKS = {
   },
   "G" : {
     "fn" : do_scroll_bottom,
+    "help" : ""
+  },
+  "n" : {
+    "fn" : do_next_search,
+    "help" : ""
+  },
+  "N" : {
+    "fn" : do_prev_search,
     "help" : ""
   },
   "y" : {
@@ -558,7 +578,11 @@ class Viewer(object):
   def __init__(self, *args, **kwargs):
     self.after_urwid = []
     self.in_command_prompt = False
-    self.prompt_mode = ''
+    self.prompt_mode = ""
+    self.last_search = ""
+    self.last_search_index = 0
+    self.last_search_token = None
+    self.clear_edit_text = False
 
   def run(self, stdscr):
     ret = read_lines(None)
@@ -578,6 +602,11 @@ class Viewer(object):
       # always switch back
       if _key_hooks == GENERAL_HOOKS:
         was_general = True
+
+
+      if self.clear_edit_text:
+        self.prompt.set_edit_text("")
+        self.clear_edit_text = False
 
       for key in keys:
         if not unhandle_input(key):
@@ -637,7 +666,52 @@ class Viewer(object):
     self.in_command_prompt = False
     self.panes.set_focus('body')
 
+  def find_and_focus(self, word=None, reverse=False):
+    start_index = 0
+    if not word:
+      word = self.last_search
 
+    if self.last_search == word:
+      start_index = self.last_search_index
+
+    self.last_search = word
+
+    tokens = self.window.original_widget.body
+    def find_word(tokens, start_index):
+      found = False
+
+      tokens = tokens[start_index:]
+
+      if self.last_search_token:
+        text, opts = self.last_search_token.get_text()
+        self.last_search_token.set_text((None, text))
+
+      for index, tok in enumerate(tokens):
+        text, opts = tok.get_text()
+        if text.find(word) >= 0:
+          debug("FOUND WORD", text)
+          self.window.original_widget.set_focus_valign('middle')
+          self.last_search_index = start_index + index
+          self.last_search_token = tok
+
+          found = True
+          break
+
+      if found:
+        found_text = self.last_search_token.get_text()[0]
+        debug("INDEX OF", found_text, "IS", self.last_search_index)
+        self.window.original_widget.set_focus(self.last_search_index)
+        self.last_search_token.set_text(('banner', text))
+      return found
+
+    found = find_word(tokens, start_index + 1)
+    if not found:
+      kv.display_status_msg("Pattern not found. Wrapping")
+      find_word(tokens, 0)
+
+  def display_status_msg(self, msg):
+    self.prompt.set_edit_text(msg)
+    self.clear_edit_text = True
 
 if __name__ == "__main__":
   kv = Viewer()
