@@ -606,6 +606,7 @@ class Viewer(object):
 
       if self.clear_edit_text:
         self.prompt.set_edit_text("")
+        self.prompt.set_caption("")
         self.clear_edit_text = False
 
       for key in keys:
@@ -647,6 +648,8 @@ class Viewer(object):
     display_lines(ret["lines"], widget)
 
     loop = urwid.MainLoop(self.panes, palette, unhandled_input=unhandle_input, input_filter=handle_input)
+
+    self.display_status_msg(('banner', "Welcome to the qitchen sink pager. Press '?' for keybindings"))
     if ret['has_content']:
       loop.run()
 
@@ -707,10 +710,17 @@ class Viewer(object):
     found = find_word(tokens, start_index + 1)
     if not found:
       kv.display_status_msg("Pattern not found. Wrapping")
-      find_word(tokens, 0)
+      found = find_word(tokens, 0)
+
+      if not found:
+        kv.display_status_msg("Pattern not found  (Press RETURN)")
+
 
   def display_status_msg(self, msg):
-    self.prompt.set_edit_text(msg)
+    if type(msg) is str:
+      msg = ('banner', msg)
+    self.prompt.set_caption(msg)
+    self.prompt.set_edit_text("")
     self.clear_edit_text = True
 
 if __name__ == "__main__":
