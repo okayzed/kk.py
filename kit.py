@@ -210,18 +210,15 @@ def do_syntax_coloring(ret, widget):
     fname = None
     for line in lines:
       if line.startswith("diff --git"):
+        output = "".join(wlines)
 
-        # previous output
-        if fname:
-          output = "".join(wlines)
-
-          try:
-            lexer = pygments.lexers.guess_lexer_for_filename(fname, output)
-          except:
-            lexer = guess_lexer(output)
-          tokens = lexer.get_tokens(output)
-          formatted_tokens = formatter.formatgenerator(tokens)
-          walker.append(urwid.Text(list(formatted_tokens)))
+        try:
+          lexer = pygments.lexers.guess_lexer_for_filename(fname, output)
+        except:
+          lexer = guess_lexer(output)
+        tokens = lexer.get_tokens(output)
+        formatted_tokens = formatter.formatgenerator(tokens)
+        walker.append(urwid.Text(list(formatted_tokens)))
 
         # next output
         fname = line.split().pop()
