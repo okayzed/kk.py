@@ -465,6 +465,8 @@ class Viewer(object):
 
   def run(self, stdscr):
     ret = read_lines(stdscr)
+    self.ret = ret
+
     # We're done with stdin,
     # now we want to read input from current terminal
     with open("/dev/tty") as f:
@@ -499,9 +501,10 @@ class Viewer(object):
     add_vim_movement()
     widget = OverlayStack(urwid.Text(""))
 
-    edit_prompt = urwid.Edit()
-    two_pane = urwid.Frame(widget, footer=edit_prompt)
+    self.prompt = urwid.Edit()
+    self.window = widget
 
+    two_pane = urwid.Frame(widget, footer=self.prompt)
     display_lines(ret["lines"], widget)
 
     loop = urwid.MainLoop(two_pane, palette, unhandled_input=unhandle_input, input_filter=handle_input)
