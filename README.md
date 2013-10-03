@@ -1,5 +1,4 @@
-# The Qitchen Sinq Pager
+# The Kitchen sinK Pager
 
-
-The Kitchen Sink pager
+The Kitchen sinK pager
 
