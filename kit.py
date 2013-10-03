@@ -242,6 +242,9 @@ def do_syntax_coloring(ret, widget):
 
     walker[:] = [ urwid.Text(list(formatted_tokens)) ]
 
+  # an anchor blank element for easily scrolling to bottom of this text view
+  walker.append(urwid.Text(''))
+
 def do_get_urls(ret, widget=None):
   tokens = ret['tokens']
 
@@ -307,9 +310,10 @@ def do_scroll_top(ret, widget):
   widget.original_widget.set_focus(0)
 
 def do_scroll_bottom(ret, widget):
-  debug("SCROLLING TO THE BOTTOM")
-  debug(widget.original_widget.body)
-  widget.original_widget.set_focus(len(widget.original_widget.body))
+  widget.original_widget.set_focus_valign("bottom")
+  debug("SCROLL BOTTOM", len(widget.original_widget.body))
+  debug(widget.original_widget.body[-1])
+  widget.original_widget.set_focus(len(widget.original_widget.body) + 1)
 
 def do_general(ret, widget):
   debug("DOING GENERAL")
