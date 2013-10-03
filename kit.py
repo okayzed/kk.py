@@ -178,7 +178,7 @@ class OverlayStack(urwid.WidgetPlaceholder):
 # {{{ character handlers
 syntax_colored = False
 previous_widget = None
-def do_syntax_coloring(ret, widget):
+def do_syntax_coloring(kv, ret, widget):
   global previous_widget, syntax_colored
   walker = urwid.SimpleListWalker([])
 
@@ -246,7 +246,7 @@ def do_syntax_coloring(ret, widget):
   # an anchor blank element for easily scrolling to bottom of this text view
   walker.append(urwid.Text(''))
 
-def do_get_urls(ret, widget=None):
+def do_get_urls(kv, ret, widget=None):
   tokens = ret['tokens']
 
   urls = []
@@ -266,18 +266,17 @@ def do_get_urls(ret, widget=None):
   widget.open_overlay(url_window)
 
 
-def do_pipe(ret, scr):
+def do_pipe(kv, ret, scr):
   def func():
     print ret['joined']
 
-  after_urwid.append(func)
+  kv.after_urwid.append(func)
   raise urwid.ExitMainLoop()
 
-def do_interactive_sed(ret, scr=None):
+def do_interactive_sed(kv, ret, scr=None):
   pass
 
-after_urwid = []
-def do_close_overlay_or_quit(ret, widget):
+def do_close_overlay_or_quit(kv, ret, widget):
   if  widget.overlay_opened:
     debug("CLOSING OVERLAY")
     widget.close_overlay()
@@ -285,10 +284,10 @@ def do_close_overlay_or_quit(ret, widget):
     debug("QUITTING")
     raise urwid.ExitMainLoop()
 
-def do_quit(ret, scr):
+def do_quit(kv, ret, scr):
   raise urwid.ExitMainLoop()
 
-def do_edit_text(ret, widget):
+def do_edit_text(kv, ret, widget):
   global previous_widget, syntax_colored
 
   lines = _get_content(os.environ["EDITOR"], ret["joined"])
@@ -298,29 +297,29 @@ def do_edit_text(ret, widget):
   ret['lines'] = lines
   ret['joined'] = ''.join(lines)
 
-def do_yank_text(ret, widget):
+def do_yank_text(kv, ret, widget):
   success = urwid.Text("Success")
   listbox = urwid.ListBox([success])
 
   widget.open_overlay(urwid.LineBox(listbox), height=3)
 
-def do_diff_text(ret, widget):
+def do_diff_text(kv, ret, widget):
   pass
 
-def do_scroll_top(ret, widget):
+def do_scroll_top(kv, ret, widget):
   widget.original_widget.set_focus_valign('top')
   widget.original_widget.set_focus(0)
 
-def do_scroll_bottom(ret, widget):
+def do_scroll_bottom(kv, ret, widget):
   widget.original_widget.set_focus_valign("bottom")
   debug(widget.original_widget.body[-1])
   widget.original_widget.set_focus(len(widget.original_widget.body) + 1)
 
-def do_general(ret, widget):
+def do_general(kv, ret, widget):
   debug("Entering general mode")
   setup_general_hooks()
 
-def do_open_help(ret, widget):
+def do_open_help(kv, ret, widget):
   listitems = []
 
   helps = []
@@ -456,52 +455,66 @@ def display_lines(lines, widget):
 
 
 # {{{
+
+
 _key_hooks = CURSES_HOOKS
-def main(stdscr):
-  ret = read_lines(stdscr)
-  # We're done with stdin,
-  # now we want to read input from current terminal
-  with open("/dev/tty") as f:
-    os.dup2(f.fileno(), 0)
+class Viewer(object):
 
-  def handle_input(keys, raw):
-    global _key_hooks
-    unhandled = []
-    debug("HANDLING INPUT", keys)
+  def __init__(self, *args, **kwargs):
+    self.after_urwid = []
 
-    was_general = False
-    # always switch back
-    if _key_hooks == GENERAL_HOOKS:
-      was_general = True
+  def run(self, stdscr):
+    ret = read_lines(stdscr)
+    # We're done with stdin,
+    # now we want to read input from current terminal
+    with open("/dev/tty") as f:
+      os.dup2(f.fileno(), 0)
 
-    for key in keys:
-      if not unhandle_input(key):
-        unhandled.append(key)
+    def handle_input(keys, raw):
+      global _key_hooks
+      unhandled = []
+      debug("HANDLING INPUT", keys)
 
-    if was_general:
-      _key_hooks = CURSES_HOOKS
-      return []
+      was_general = False
+      # always switch back
+      if _key_hooks == GENERAL_HOOKS:
+        was_general = True
 
-    return unhandled
+      for key in keys:
+        if not unhandle_input(key):
+          unhandled.append(key)
 
-  def unhandle_input(key):
-    if key in _key_hooks.keys():
-      debug("KEY ", key, "PRESSED")
-      _key_hooks[key]['fn'](ret, widget)
-      return True
+      if was_general:
+        _key_hooks = CURSES_HOOKS
+        return []
 
-  add_vim_movement()
-  widget = OverlayStack(urwid.Text(""))
-  display_lines(ret["lines"], widget)
+      return unhandled
 
-  loop = urwid.MainLoop(widget, palette, unhandled_input=unhandle_input, input_filter=handle_input)
-  if ret['has_content']:
-    loop.run()
+    def unhandle_input(key):
+      if key in _key_hooks.keys():
+        debug("KEY ", key, "PRESSED")
+        _key_hooks[key]['fn'](self, ret, widget)
+        return True
+
+    add_vim_movement()
+    widget = OverlayStack(urwid.Text(""))
+
+    edit_prompt = urwid.Edit()
+    two_pane = urwid.Frame(widget, footer=edit_prompt)
+
+    display_lines(ret["lines"], widget)
+
+    loop = urwid.MainLoop(two_pane, palette, unhandled_input=unhandle_input, input_filter=handle_input)
+    if ret['has_content']:
+      loop.run()
+
+
 
 
 if __name__ == "__main__":
-  curses.wrapper(main)
-  for after in after_urwid:
+  kv = Viewer()
+  curses.wrapper(kv.run)
+  for after in kv.after_urwid:
     if hasattr(after, '__call__'):
       try:
         after()
