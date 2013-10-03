@@ -28,6 +28,7 @@ import pygments.formatters
 from urwidpygments import UrwidFormatter
 from pygments.lexers import guess_lexer
 
+# {{{ util
 def add_vim_movement():
   updatedMappings = {
     'k':        'cursor up',
@@ -46,6 +47,7 @@ debugfile = open(__name__ + ".debug", "w")
 def debug(*args):
   print >> debugfile, " ".join([str(i) for i in args])
 
+# }}}
 
 # {{{ read input
 def read_lines(lines=None):
@@ -104,7 +106,6 @@ def read_lines(lines=None):
 
 # }}}
 
-
 # {{{ http://stackoverflow.com/questions/2576956/getting-data-from-external-program
 def _get_content(editor, initial=""):
     from subprocess import call
@@ -135,7 +136,15 @@ class OverlayStack(urwid.WidgetPlaceholder):
     super(OverlayStack, self).__init__(*args, **kwargs)
     self.overlay_opened = False
 
-  def open_overlay(self, widget, **options):
+  def open_overlay(self, widget, modal_keys=None, **options):
+    global _key_hooks
+    if not modal_keys:
+      modal_keys = {}
+
+    modal_keys.update({ "q" : CURSES_HOOKS['q'], "esc" : CURSES_HOOKS['esc'] })
+    # we should install these modal keys
+    _key_hooks = modal_keys
+
     if not self.overlay_opened:
       defaults = {
         "align" : "center",
@@ -159,8 +168,10 @@ class OverlayStack(urwid.WidgetPlaceholder):
     self.overlay_opened = True
 
   def close_overlay(self, ret=None, widget=None):
+    global _key_hooks
     self.original_widget = self.overlay_parent
     self.overlay_opened = False
+    _key_hooks = CURSES_HOOKS
 
 # }}}
 
@@ -218,13 +229,12 @@ def do_syntax_coloring(ret, widget):
 
       wlines.append(line)
 
-    if wlines:
-      lexer = pygments.lexers.guess_lexer_for_filename(fname, "\n".join(wlines))
+    if len(wlines):
+      output = "".join(wlines)
+      lexer = pygments.lexers.guess_lexer_for_filename(fname, output)
       tokens = lexer.get_tokens(output)
       formatted_tokens = formatter.formatgenerator(tokens)
       walker.append(urwid.Text(list(formatted_tokens)))
-
-    pass
   else:
     # otherwise, just try and highlight the whole text at once
     tokens = lexer.get_tokens(output)
@@ -265,8 +275,10 @@ def do_interactive_sed(ret, scr=None):
 after_urwid = []
 def do_close_overlay_or_quit(ret, widget):
   if  widget.overlay_opened:
+    debug("CLOSING OVERLAY")
     widget.close_overlay()
   else:
+    debug("QUITTING")
     raise urwid.ExitMainLoop()
 
 def do_quit(ret, scr):
@@ -291,13 +303,25 @@ def do_yank_text(ret, widget):
 def do_diff_text(ret, widget):
   pass
 
+def do_scroll_top(ret, widget):
+  widget.original_widget.set_focus(0)
+
+def do_scroll_bottom(ret, widget):
+  debug("SCROLLING TO THE BOTTOM")
+  debug(widget.original_widget.body)
+  widget.original_widget.set_focus(len(widget.original_widget.body))
+
+def do_general(ret, widget):
+  debug("DOING GENERAL")
+  setup_general_hooks()
+
 def do_open_help(ret, widget):
   listitems = []
 
   helps = []
   shortcuts = []
-  for item in CURSES_HOOKS:
-    msg = CURSES_HOOKS[item].get('help')
+  for item in _key_hooks:
+    msg = _key_hooks[item].get('help')
     if msg:
       shortcut = urwid.Text(('banner', item))
       shortcut.align = "right"
@@ -308,7 +332,7 @@ def do_open_help(ret, widget):
       listitems.append(columns)
 
   listbox = urwid.ListBox(listitems)
-  widget.open_overlay(urwid.LineBox(listbox), 
+  widget.open_overlay(urwid.LineBox(listbox),
     width=("relative", 80), height=("relative", 80))
 
 CURSES_HOOKS = {
@@ -336,6 +360,14 @@ CURSES_HOOKS = {
     "fn" : do_edit_text,
     "help" : "open the current text in $EDITOR"
   },
+  "g" : {
+    "fn" : do_general,
+    "help" : "enter general mode"
+  },
+  "G" : {
+    "fn" : do_scroll_bottom,
+    "help" : ""
+  },
   "y" : {
     "fn" : do_yank_text,
     "help" : "save the current kit output for later use"
@@ -353,6 +385,45 @@ CURSES_HOOKS = {
     "help" : "Close kit / Close current overlay"
   },
 }
+
+GENERAL_HOOKS = {
+  "?" : {
+    "fn" : do_open_help,
+    "help" : "Show this screen"
+  },
+  "q" : {
+    "fn" : do_close_overlay_or_quit,
+    "help" : "Close this overlay"
+  },
+  "g" : {
+    "fn" : do_scroll_top,
+    "help" : "Scroll to top of content"
+  }
+}
+
+debug("SETTING UP GENERAL HOOKS")
+for hook in GENERAL_HOOKS:
+  def build_replacement():
+    obj = GENERAL_HOOKS[hook]
+
+    def replacement(*args, **kwargs):
+      global _key_hooks
+      debug("CALLING REPLACEMENT FUNCTION", obj)
+      obj['oldfn'](*args, **kwargs)
+      _key_hooks = CURSES_HOOKS
+
+    obj['oldfn'] = obj['fn']
+    obj['fn'] = replacement
+
+  build_replacement()
+
+
+def setup_general_hooks():
+  global _key_hooks
+
+  debug("USING GENERAL HOOKS")
+  _key_hooks = GENERAL_HOOKS
+
 
 # }}}
 
@@ -379,6 +450,9 @@ def display_lines(lines, widget):
 
 # }}}
 
+
+# {{{
+_key_hooks = CURSES_HOOKS
 def main(stdscr):
   ret = read_lines(stdscr)
   # We're done with stdin,
@@ -386,23 +460,38 @@ def main(stdscr):
   with open("/dev/tty") as f:
     os.dup2(f.fileno(), 0)
 
-  def handle_input(key):
-    if type(key) == str:
-      key = key.lower()
+  def handle_input(keys, raw):
+    global _key_hooks
+    unhandled = []
+    debug("HANDLING INPUT", keys)
 
-    y, x = stdscr.getmaxyx()
+    was_general = False
+    # always switch back
+    if _key_hooks == GENERAL_HOOKS:
+      was_general = True
 
-    if key in CURSES_HOOKS:
-      val = CURSES_HOOKS[key]['fn'](ret, widget)
-      if val:
-        return val
+    for key in keys:
+      if not unhandle_input(key):
+        unhandled.append(key)
 
+    if was_general:
+      _key_hooks = CURSES_HOOKS
+      return []
+
+    return unhandled
+
+  def unhandle_input(key):
+    debug("UNHANDLING INPUT", key)
+    if key in _key_hooks.keys():
+      debug("KEY ", key, "PRESSED")
+      _key_hooks[key]['fn'](ret, widget)
+      return True
 
   add_vim_movement()
   widget = OverlayStack(urwid.Text(""))
   display_lines(ret["lines"], widget)
 
-  loop = urwid.MainLoop(widget, palette, unhandled_input=handle_input)
+  loop = urwid.MainLoop(widget, palette, unhandled_input=unhandle_input, input_filter=handle_input)
   if ret['has_content']:
     loop.run()
 
@@ -415,3 +504,4 @@ if __name__ == "__main__":
         after()
       except Exception, e:
         raise e
+# }}}
