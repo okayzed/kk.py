@@ -210,6 +210,7 @@ def do_syntax_coloring(ret, widget):
     fname = None
     for line in lines:
       if line.startswith("diff --git"):
+
         output = "".join(wlines)
 
         try:
@@ -228,7 +229,10 @@ def do_syntax_coloring(ret, widget):
 
     if len(wlines):
       output = "".join(wlines)
-      lexer = pygments.lexers.guess_lexer_for_filename(fname, output)
+      try:
+        lexer = pygments.lexers.guess_lexer_for_filename(fname or "noname", output)
+      except:
+        lexer = guess_lexer(output)
       tokens = lexer.get_tokens(output)
       formatted_tokens = formatter.formatgenerator(tokens)
       walker.append(urwid.Text(list(formatted_tokens)))
@@ -304,16 +308,16 @@ def do_diff_text(ret, widget):
   pass
 
 def do_scroll_top(ret, widget):
+  widget.original_widget.set_focus_valign('top')
   widget.original_widget.set_focus(0)
 
 def do_scroll_bottom(ret, widget):
   widget.original_widget.set_focus_valign("bottom")
-  debug("SCROLL BOTTOM", len(widget.original_widget.body))
   debug(widget.original_widget.body[-1])
   widget.original_widget.set_focus(len(widget.original_widget.body) + 1)
 
 def do_general(ret, widget):
-  debug("DOING GENERAL")
+  debug("Entering general mode")
   setup_general_hooks()
 
 def do_open_help(ret, widget):
@@ -402,7 +406,6 @@ GENERAL_HOOKS = {
   }
 }
 
-debug("SETTING UP GENERAL HOOKS")
 for hook in GENERAL_HOOKS:
   def build_replacement():
     obj = GENERAL_HOOKS[hook]
@@ -482,7 +485,6 @@ def main(stdscr):
     return unhandled
 
   def unhandle_input(key):
-    debug("UNHANDLING INPUT", key)
     if key in _key_hooks.keys():
       debug("KEY ", key, "PRESSED")
       _key_hooks[key]['fn'](ret, widget)
