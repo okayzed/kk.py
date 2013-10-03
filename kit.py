@@ -386,7 +386,7 @@ CURSES_HOOKS = {
   },
   "esc" : {
     "fn" : do_close_overlay_or_quit,
-    "help" : "Close kit / Close current overlay"
+    "help" : ""
   },
 }
 
@@ -433,7 +433,7 @@ def setup_general_hooks():
 
 # {{{ display input
 palette = [
-  ('banner', 'black', 'light gray'),
+  ('banner', 'black', 'white'),
   ('streak', 'black', 'dark red'),
   ('bg', 'black', 'dark blue'),
 ]
