@@ -50,28 +50,7 @@ def debug(*args):
 # }}}
 
 # {{{ read input
-def read_lines(lines=None):
-  maxx = 0
-  numlines = 0
-  lines = []
-  content = False
-
-  for line in (lines or sys.stdin):
-    maxx = max(maxx, len(line))
-    numlines += 1
-    lines.append(line)
-    if not content and line.strip() != "":
-      content = True
-
-  maxy = numlines
-
-  joined = ''.join(lines)
-
-  # this is the second pass, and where the actual parsing of tokens should
-  # probably happen. In addition, we should look at the tokens in each line and
-  # maybe highlight specific ones? #www.yahoo.com
-
-
+def tokenize(lines):
   # http://redd.it
   all_tokens = []
   for index, line in enumerate(lines):
@@ -89,6 +68,31 @@ def read_lines(lines=None):
       })
 
       col += len(token) + 1
+  return all_tokens
+
+def read_lines(lines=None):
+  maxx = 0
+  numlines = 0
+  lines = []
+  content = False
+
+  for line in (lines or sys.stdin):
+    maxx = max(maxx, len(line))
+    numlines += 1
+    line = line.replace('[\x01-\x1F\x7F]', '')
+    lines.append(line)
+    if not content and line.strip() != "":
+      content = True
+
+  maxy = numlines
+
+  joined = ''.join(lines)
+
+  # this is the second pass, and where the actual parsing of tokens should
+  # probably happen. In addition, we should look at the tokens in each line and
+  # maybe highlight specific ones? #www.yahoo.com
+
+  all_tokens = tokenize(lines)
 
   return {
     "maxx": maxx,
@@ -106,7 +110,8 @@ def read_lines(lines=None):
 
 # }}}
 
-# {{{ http://stackoverflow.com/questions/2576956/getting-data-from-external-program
+# {{{ external editor callout
+# http://stackoverflow.com/questions/2576956/getting-data-from-external-program
 def _get_content(editor, initial=""):
     from subprocess import call
     from tempfile import NamedTemporaryFile
@@ -197,12 +202,26 @@ def do_syntax_coloring(kv, ret, widget):
   widget.original_widget = listbox
   syntax_colored = True
 
-  lexer = guess_lexer(ret['joined'])
-
   formatter = UrwidFormatter()
   lines = ret['lines']
   output = ret['joined']
   # special case for git diffs
+  def add_lines_to_walker(lines, walker, fname=None):
+    if len(lines):
+      output = "".join(lines)
+      lexer = guess_lexer(output)
+      try:
+        if fname:
+          lexer = pygments.lexers.guess_lexer_for_filename(fname, output)
+      except:
+        pass
+
+      debug(fname, lexer)
+      tokens = lexer.get_tokens(output)
+      formatted_tokens = list(formatter.formatgenerator(tokens))
+
+      walker.append(urwid.Text(list(formatted_tokens)))
+
   if ret['joined'].find("diff --git") >= 0:
     walker[:] = [ ]
     wlines = []
@@ -213,13 +232,7 @@ def do_syntax_coloring(kv, ret, widget):
 
         output = "".join(wlines)
 
-        try:
-          lexer = pygments.lexers.guess_lexer_for_filename(fname, output)
-        except:
-          lexer = guess_lexer(output)
-        tokens = lexer.get_tokens(output)
-        formatted_tokens = formatter.formatgenerator(tokens)
-        walker.append(urwid.Text(list(formatted_tokens)))
+        add_lines_to_walker(lines, walker, fname)
 
         # next output
         fname = line.split().pop()
@@ -227,24 +240,27 @@ def do_syntax_coloring(kv, ret, widget):
 
       wlines.append(line)
 
-    if len(wlines):
-      output = "".join(wlines)
-      try:
-        lexer = pygments.lexers.guess_lexer_for_filename(fname or "noname", output)
-      except:
-        lexer = guess_lexer(output)
-      tokens = lexer.get_tokens(output)
-      formatted_tokens = formatter.formatgenerator(tokens)
-      walker.append(urwid.Text(list(formatted_tokens)))
+    add_lines_to_walker(wlines, walker, fname)
   else:
-    # otherwise, just try and highlight the whole text at once
-    tokens = lexer.get_tokens(output)
-    formatted_tokens = formatter.formatgenerator(tokens)
-
-    walker[:] = [ urwid.Text(list(formatted_tokens)) ]
+    add_lines_to_walker(lines, walker, None)
 
   # an anchor blank element for easily scrolling to bottom of this text view
   walker.append(urwid.Text(''))
+
+def do_get_files(kv, ret, widget):
+  tokens = ret['tokens']
+  files = []
+  for token in tokens:
+    debug("Checking file", token)
+    if os.path.isfile(token['text']):
+      files.append(token['text'])
+
+  if not len(files):
+    files.append("No files found in document")
+  walker = urwid.SimpleListWalker([urwid.Text(token) for token in files])
+  listbox = urwid.ListBox(walker)
+  url_window = urwid.LineBox(listbox)
+  widget.open_overlay(url_window)
 
 def do_get_urls(kv, ret, widget=None):
   tokens = ret['tokens']
@@ -296,6 +312,7 @@ def do_edit_text(kv, ret, widget):
   display_lines(lines, widget)
   ret['lines'] = lines
   ret['joined'] = ''.join(lines)
+  ret['tokens'] = tokenize(lines)
 
 def do_yank_text(kv, ret, widget):
   success = urwid.Text("Success")
@@ -319,6 +336,25 @@ def do_general(kv, ret, widget):
   debug("Entering general mode")
   setup_general_hooks()
 
+def do_search_prompt(kv, ret, widget):
+  debug("ENTERING SEARCH MODE")
+  kv.open_command_line('/')
+
+def do_command_prompt(kv, ret, widget):
+  debug("ENTERING COMMAND MODE")
+  kv.open_command_line(':')
+
+def handle_command(command):
+  debug("Handling command", command)
+
+def do_command_entered(kv, ret, widget):
+  if kv.in_command_prompt:
+    cmd, opts = kv.prompt.get_text()
+    kv.prompt.set_edit_text('')
+    handle_command(cmd)
+
+  kv.close_command_line()
+
 def do_open_help(kv, ret, widget):
   listitems = []
 
@@ -340,6 +376,14 @@ def do_open_help(kv, ret, widget):
     width=("relative", 80), height=("relative", 80))
 
 CURSES_HOOKS = {
+  ":" : {
+    "fn" : do_command_prompt,
+    "help" : "Enter command mode",
+  },
+  "/" : {
+    "fn" : do_search_prompt,
+    "help" : "Enter interactive search"
+  },
   "q" : {
     "fn" : do_close_overlay_or_quit,
     "help" : "Quit kit / Close current overlay"
@@ -355,6 +399,10 @@ CURSES_HOOKS = {
   "c" : {
     "fn" : do_syntax_coloring,
     "help" : "turn on syntax highlights"
+  },
+  "f" : {
+    "fn" : do_get_files,
+    "help" : "dump the files from the current buffer"
   },
   "u" : {
     "fn" : do_get_urls,
@@ -388,6 +436,10 @@ CURSES_HOOKS = {
     "fn" : do_close_overlay_or_quit,
     "help" : ""
   },
+  "enter" : {
+    "fn" : do_command_entered,
+    "help" : ""
+  }
 }
 
 GENERAL_HOOKS = {
@@ -453,8 +505,7 @@ def display_lines(lines, widget):
 
 # }}}
 
-
-# {{{
+# {{{ Viewer class
 
 
 _key_hooks = CURSES_HOOKS
@@ -462,6 +513,8 @@ class Viewer(object):
 
   def __init__(self, *args, **kwargs):
     self.after_urwid = []
+    self.in_command_prompt = False
+    self.prompt_mode = ''
 
   def run(self, stdscr):
     ret = read_lines(stdscr)
@@ -493,6 +546,17 @@ class Viewer(object):
       return unhandled
 
     def unhandle_input(key):
+      if self.in_command_prompt:
+        if key == 'enter':
+          do_command_entered(kv, ret, widget)
+          return True
+
+        if key == 'esc':
+          self.close_command_line()
+          return True
+
+        return
+
       if key in _key_hooks.keys():
         debug("KEY ", key, "PRESSED")
         _key_hooks[key]['fn'](self, ret, widget)
@@ -502,15 +566,32 @@ class Viewer(object):
     widget = OverlayStack(urwid.Text(""))
 
     self.prompt = urwid.Edit()
+    prompt_cols = urwid.Columns([ ("fixed", 1, urwid.Text(self.prompt_mode)), ("weight", 1, self.prompt)])
+    self.command_line = urwid.WidgetPlaceholder(prompt_cols)
     self.window = widget
 
-    two_pane = urwid.Frame(widget, footer=self.prompt)
+    self.panes = urwid.Frame(widget, footer=self.command_line)
     display_lines(ret["lines"], widget)
 
-    loop = urwid.MainLoop(two_pane, palette, unhandled_input=unhandle_input, input_filter=handle_input)
+    loop = urwid.MainLoop(self.panes, palette, unhandled_input=unhandle_input, input_filter=handle_input)
     if ret['has_content']:
       loop.run()
 
+
+  def open_command_line(self, mode=':'):
+    self.prompt_mode = mode
+    prompt_cols = urwid.Columns([ ("fixed", 1, urwid.Text(self.prompt_mode)), ("weight", 1, self.prompt)])
+    self.command_line.original_widget = prompt_cols
+    self.in_command_prompt = True
+    self.panes.set_focus('footer')
+    self.prompt.set_edit_text("")
+
+  def close_command_line(self, mode=':'):
+    self.prompt.set_edit_text("")
+    prompt_cols = urwid.Columns([ ("fixed", 1, urwid.Text(" ")), ("weight", 1, self.prompt)])
+    self.command_line.original_widget = prompt_cols
+    self.in_command_prompt = False
+    self.panes.set_focus('body')
 
 
 
