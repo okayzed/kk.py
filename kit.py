@@ -402,6 +402,8 @@ def handle_command(prompt, command):
   debug("Handling command", prompt, command)
   if prompt == '/':
     kv.find_and_focus(command)
+  if prompt == ':':
+    kv.display_status_msg('Sorry, command mode is not yet implemented')
 
 def do_command_entered(kv, ret, widget):
   if kv.in_command_prompt:
