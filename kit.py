@@ -18,6 +18,7 @@
 import curses
 import itertools
 import os
+import subprocess
 import sys
 import time
 import urlparse
@@ -70,13 +71,17 @@ def tokenize(lines):
       col += len(token) + 1
   return all_tokens
 
-def read_lines(lines=None):
+def read_lines(in_lines=None):
   maxx = 0
   numlines = 0
-  lines = []
   content = False
+  debug("LIENS", in_lines)
 
-  for line in (lines or sys.stdin):
+  if not in_lines:
+    in_lines = list(sys.stdin.readlines())
+
+  lines = []
+  for line in in_lines:
     maxx = max(maxx, len(line))
     numlines += 1
     line = line.replace('[\x01-\x1F\x7F]', '')
@@ -104,9 +109,9 @@ def read_lines(lines=None):
   }
 
 
-"http://google.com"
+"http://google.com/the/first/one"
 
-"http://yahoo.com"
+"http://yahoo.com/?asecond=eht"
 
 # }}}
 
@@ -192,19 +197,22 @@ def do_syntax_coloring(kv, ret, widget):
     widget.original_widget = previous_widget
     previous_widget = original_text
 
+    debug("SYNTAX COLORING PREV WIDGET")
+
     syntax_colored = not syntax_colored
     return
 
 
+  debug("INITIALIZING SYNTAX COLORED WIDGET")
   # one time setup
   previous_widget = widget.original_widget
   listbox = urwid.ListBox(walker)
   widget.original_widget = listbox
   syntax_colored = True
+  debug("RET", ret)
+  debug("SYNTAX COLORING", ret['lines'])
 
   formatter = UrwidFormatter()
-  lines = ret['lines']
-  output = ret['joined']
   # special case for git diffs
   def add_lines_to_walker(lines, walker, fname=None):
     if len(lines):
@@ -227,12 +235,13 @@ def do_syntax_coloring(kv, ret, widget):
     wlines = []
     lexer = None
     fname = None
-    for line in lines:
+
+    for line in ret['lines']:
       if line.startswith("diff --git"):
 
         output = "".join(wlines)
 
-        add_lines_to_walker(lines, walker, fname)
+        add_lines_to_walker(wlines, walker, fname)
 
         # next output
         fname = line.split().pop()
@@ -242,25 +251,52 @@ def do_syntax_coloring(kv, ret, widget):
 
     add_lines_to_walker(wlines, walker, fname)
   else:
+    lines = ret['lines']
     add_lines_to_walker(lines, walker, None)
 
   # an anchor blank element for easily scrolling to bottom of this text view
   walker.append(urwid.Text(''))
 
+def overlay_menu(widget, title, items, cb):
+  def button(text, value):
+    def button_pressed(but):
+      debug("BUTTON PRESSED", title, text)
+      cb(text)
+
+    button = urwid.Button(text[:40], on_press=button_pressed)
+
+    return button
+
+  walker = urwid.SimpleListWalker([button(token, token) for token in items])
+  walker.insert(0, urwid.Text(title))
+  listbox = urwid.ListBox(walker)
+  url_window = urwid.LineBox(listbox)
+  widget.open_overlay(url_window)
+
 def do_get_files(kv, ret, widget):
   tokens = ret['tokens']
   files = []
   for token in tokens:
-    debug("Checking file", token)
     if os.path.isfile(token['text']):
       files.append(token['text'])
 
   if not len(files):
     files.append("No files found in document")
-  walker = urwid.SimpleListWalker([urwid.Text(token) for token in files])
-  listbox = urwid.ListBox(walker)
-  url_window = urwid.LineBox(listbox)
-  widget.open_overlay(url_window)
+
+  def func(response):
+    try:
+      with open(response, "r") as f:
+        contents = list(f.readlines())
+        debug("READ FILE", contents)
+        widget.close_overlay()
+        previous_widget = None
+        syntax_colored = False
+        kv.ret = read_lines(contents)
+        display_lines(contents, widget)
+    except Exception, e:
+      debug("EXCEPTION", e)
+
+  overlay_menu(widget, "Choose a file to open", files, func)
 
 def do_get_urls(kv, ret, widget=None):
   tokens = ret['tokens']
@@ -268,7 +304,7 @@ def do_get_urls(kv, ret, widget=None):
   urls = []
   import re
   for token in tokens:
-    match = re.search("^\W*(https?://[\w\.]*|www.[\w\.]*)", token['text'])
+    match = re.search("^\W*(https?://[\w\./]*|www.[\w\./\?&\.]*)", token['text'])
     if match:
       urls.append(match.group(1))
 
@@ -276,10 +312,13 @@ def do_get_urls(kv, ret, widget=None):
   if not len(urls):
     urls.append("No URLS found in document")
 
-  walker = urwid.SimpleListWalker([urwid.Text(url) for url in urls])
-  listbox = urwid.ListBox(walker)
-  url_window = urwid.LineBox(listbox)
-  widget.open_overlay(url_window)
+  def func(response):
+    if not response.startswith('http'):
+      response = "http://%s" % response
+    subprocess.Popen(["/usr/bin/xdg-open", response])
+    widget.close_overlay()
+
+  overlay_menu(widget, "Choose a URL to open", urls, func)
 
 
 def do_pipe(kv, ret, scr):
@@ -344,14 +383,14 @@ def do_command_prompt(kv, ret, widget):
   debug("ENTERING COMMAND MODE")
   kv.open_command_line(':')
 
-def handle_command(command):
-  debug("Handling command", command)
+def handle_command(prompt, command):
+  debug("Handling command", prompt, command)
 
 def do_command_entered(kv, ret, widget):
   if kv.in_command_prompt:
     cmd, opts = kv.prompt.get_text()
     kv.prompt.set_edit_text('')
-    handle_command(cmd)
+    handle_command(kv.prompt_mode, cmd)
 
   kv.close_command_line()
 
@@ -517,7 +556,7 @@ class Viewer(object):
     self.prompt_mode = ''
 
   def run(self, stdscr):
-    ret = read_lines(stdscr)
+    ret = read_lines(None)
     self.ret = ret
 
     # We're done with stdin,
@@ -548,7 +587,7 @@ class Viewer(object):
     def unhandle_input(key):
       if self.in_command_prompt:
         if key == 'enter':
-          do_command_entered(kv, ret, widget)
+          do_command_entered(kv, self.ret, widget)
           return True
 
         if key == 'esc':
@@ -559,7 +598,7 @@ class Viewer(object):
 
       if key in _key_hooks.keys():
         debug("KEY ", key, "PRESSED")
-        _key_hooks[key]['fn'](self, ret, widget)
+        _key_hooks[key]['fn'](self, self.ret, widget)
         return True
 
     add_vim_movement()
