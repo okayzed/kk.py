@@ -209,9 +209,22 @@ previous_widget = None
 def get_focus_index(widget, rows):
   offset, inset = widget.get_focus_offset_inset((1, rows))
   focus_widget, focus_index = widget.get_focus()
-  focused_index = focus_index - offset
 
-  return focused_index
+  return focus_index, offset
+
+def readjust_display(kv, listbox, focused_index):
+
+  index, offset = focused_index
+  if kv.last_search_token:
+    text, attr = kv.last_search_token.get_text()
+    kv.last_search_token.set_text((None, text))
+    kv.last_search_token = listbox.body[kv.last_search_index]
+    new_text, attr = kv.last_search_token.get_text()
+    kv.last_search_token.set_text(('banner', new_text))
+
+  listbox.set_focus(index)
+  listbox.set_focus_valign(('fixed top', offset))
+
 
 def do_syntax_coloring(kv, ret, widget):
   global previous_widget, syntax_colored
@@ -226,8 +239,7 @@ def do_syntax_coloring(kv, ret, widget):
     debug("SYNTAX COLORING PREV WIDGET")
 
     syntax_colored = not syntax_colored
-    widget.original_widget.set_focus(focused_index)
-    widget.original_widget.set_focus_valign('top')
+    readjust_display(kv, widget.original_widget, focused_index)
     return
 
 
@@ -334,9 +346,7 @@ def do_syntax_coloring(kv, ret, widget):
 
   # an anchor blank element for easily scrolling to bottom of this text view
   walker.append(urwid.Text(''))
-
-  widget.original_widget.set_focus(focused_index)
-  widget.original_widget.set_focus_valign('top')
+  readjust_display(kv, widget.original_widget, focused_index)
 
 def overlay_menu(widget, title, items, cb):
   def button(text, value):
