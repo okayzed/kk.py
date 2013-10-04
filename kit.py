@@ -33,6 +33,7 @@
 import curses
 import itertools
 import os
+import re
 import subprocess
 import sys
 import time
@@ -869,9 +870,10 @@ class Viewer(object):
       if reverse:
         enum_tokens = list(reversed(list(enumerate(tokens))))
 
+      word_re = re.compile(word)
       for index, tok in enum_tokens:
         text, opts = tok.get_text()
-        if text.find(word) >= 0:
+        if word_re.search(text):
           debug("FOUND WORD", word, "IN", text)
           self.window.original_widget.set_focus_valign('middle')
 
