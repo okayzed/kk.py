@@ -383,7 +383,7 @@ def do_get_git_objects(kv, ret, widget):
       if re.search('^\w*\d*\w\d(\d|\w)+$', text):
         debug("GIT HASH?", text)
         if is_git_like(text):
-          files.append(text)
+          files.append(text[:10])
 
   if not len(files):
     files.append("No git objects found in document")
