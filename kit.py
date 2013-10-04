@@ -75,7 +75,7 @@ def tokenize(lines):
     tokens = line.split()
     for token in tokens:
       all_tokens.append({
-        "text" : token.strip(),
+        "text" : token,
         "line" : index,
         "col" : col
       })
@@ -225,6 +225,46 @@ def do_syntax_coloring(kv, ret, widget):
 
   formatter = UrwidFormatter()
   # special case for git diffs
+  def handle_token(token, formatted_line, newline, diff=False):
+    text = token[1]
+    debug("HANDLING TOKEN", newline, diff, repr(text))
+    if not text:
+      return newline
+
+    if newline and diff and False:
+      if text[0] == '+':
+        debug("DIFF ADD")
+        formatted_line.append(('diff_add', '+'))
+        text = token[1][1:]
+        token = (token[0], text)
+      elif text[0] == '-':
+        formatted_line.append(('diff_del', '-'))
+        text = token[1][1:]
+        token = (token[0], text)
+        debug("DIFF DEL")
+
+    if text.find('\n') >= 0:
+      split_line = text
+      while split_line:
+        n = split_line.find('\n')
+        if n >= 0:
+          newline = True
+          last_word = split_line[:n]
+          split_line = split_line[n+1:]
+          formatted_line.append('')
+          walker.append(urwid.Text(list(formatted_line)))
+          del formatted_line[:]
+        else:
+          formatted_line.append((token[0], split_line))
+          break
+    else:
+      formatted_line.append(token)
+      newline = False
+
+    return newline
+    # end of handle_token function
+
+
   def add_lines_to_walker(lines, walker, fname=None, diff=False):
     if len(lines):
       output = "".join(lines)
@@ -241,24 +281,16 @@ def do_syntax_coloring(kv, ret, widget):
       # one line at a time
       formatted_tokens = list(formatter.formatgenerator(tokens))
       formatted_line = []
-      newline = True
-      for token in formatted_tokens:
-        if newline and diff:
-          if token[1] == '+':
-            token = ('diff_add', token[1])
-          if token[1] == '-':
-            token = ('diff_del', token[1])
+      newline = False
 
-        if token[1] == '\n':
-          if formatted_line:
-            walker.append(urwid.Text(formatted_line))
-            formatted_line = []
-            newline = True
-        else:
-          formatted_line.append(token)
-          newline = False
+      for token in formatted_tokens:
+        newline = handle_token(token, formatted_line, newline, diff)
+
+      formatted_line.append('')
+
       if formatted_line:
         walker.append(urwid.Text(list(formatted_line)))
+
 
 
   if ret['joined'].find("diff --git") >= 0:
@@ -286,6 +318,7 @@ def do_syntax_coloring(kv, ret, widget):
 
   # an anchor blank element for easily scrolling to bottom of this text view
   walker.append(urwid.Text(''))
+  kv.repaint_screen()
 
 def overlay_menu(widget, title, items, cb):
   def button(text, value):
@@ -690,12 +723,14 @@ class Viewer(object):
     self.panes = urwid.Frame(widget, footer=self.command_line)
     display_lines(ret["lines"], widget)
 
-    loop = urwid.MainLoop(self.panes, palette, unhandled_input=unhandle_input, input_filter=handle_input)
+    self.loop = urwid.MainLoop(self.panes, palette, unhandled_input=unhandle_input, input_filter=handle_input)
 
     self.display_status_msg(('banner', "Welcome to the qitchen sink pager. Press '?' for keybindings"))
     if ret['has_content']:
-      loop.run()
+      self.loop.run()
 
+  def repaint_screen(self):
+    self.loop.draw_screen()
 
   def open_command_line(self, mode=':'):
     self.prompt_mode = mode
