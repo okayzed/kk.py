@@ -73,7 +73,7 @@ def tokenize(lines):
   for index, line in enumerate(lines):
     col = 0
 
-    while line[col] == " ":
+    while col < len(line) and line[col] == " ":
       col += 1
 
     tokens = line.split()
@@ -354,6 +354,43 @@ def overlay_menu(widget, title, items, cb):
   url_window = urwid.LineBox(listbox)
   widget.open_overlay(url_window)
 
+
+def is_git_like(obj):
+  with open(os.devnull, "w") as fnull:
+    ret = subprocess.call(['git', 'show', obj], stdout=fnull, stderr=fnull)
+
+  return ret == 0
+
+def do_get_git_objects(kv, ret, widget):
+  import re
+  tokens = ret['tokens']
+  files = []
+  visited = {}
+  for token in tokens:
+    text = token['text']
+    if not text in visited:
+      visited[text] = True
+      if re.search('^\w*\d*\w\d(\d|\w)+$', text):
+        debug("GIT HASH?", text)
+        if is_git_like(text):
+          files.append(text)
+
+  if not len(files):
+    files.append("No git objects found in document")
+
+  def func(response):
+    contents = subprocess.check_output(['git', 'show', response])
+    lines = [contents]
+    widget.close_overlay()
+    previous_widget = None
+    syntax_colored = False
+    kv.ret = read_lines(lines)
+    display_lines(lines, widget)
+
+  overlay_menu(widget, "Choose a git object to open", files, func)
+
+
+
 def do_get_files(kv, ret, widget):
   tokens = ret['tokens']
   files = []
@@ -548,14 +585,6 @@ CURSES_HOOKS = {
     "fn" : do_syntax_coloring,
     "help" : "turn on syntax highlights"
   },
-  "f" : {
-    "fn" : do_get_files,
-    "help" : "dump the files from the current buffer"
-  },
-  "u" : {
-    "fn" : do_get_urls,
-    "help" : "dump the URLs from the current buffer"
-  },
   "e" : {
     "fn" : do_edit_text,
     "help" : "open the current text in $EDITOR"
@@ -595,7 +624,19 @@ CURSES_HOOKS = {
   "enter" : {
     "fn" : do_command_entered,
     "help" : ""
-  }
+  },
+  "f" : {
+    "fn" : do_get_files,
+    "help" : "dump the files from the current buffer"
+  },
+  "u" : {
+    "fn" : do_get_urls,
+    "help" : "dump the URLs from the current buffer"
+  },
+  "o" : {
+    "fn" : do_get_git_objects,
+    "help" : "dump the git objects from the current buffer"
+  },
 }
 
 GENERAL_HOOKS = {
@@ -610,7 +651,7 @@ GENERAL_HOOKS = {
   "g" : {
     "fn" : do_scroll_top,
     "help" : "Scroll to top of content"
-  }
+  },
 }
 
 for hook in GENERAL_HOOKS:
