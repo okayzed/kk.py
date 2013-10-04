@@ -222,7 +222,7 @@ def do_syntax_coloring(kv, ret, widget):
 
   formatter = UrwidFormatter()
   # special case for git diffs
-  def add_lines_to_walker(lines, walker, fname=None):
+  def add_lines_to_walker(lines, walker, fname=None, diff=False):
     if len(lines):
       output = "".join(lines)
       lexer = guess_lexer(output)
@@ -238,14 +238,22 @@ def do_syntax_coloring(kv, ret, widget):
       # one line at a time
       formatted_tokens = list(formatter.formatgenerator(tokens))
       formatted_line = []
+      newline = True
       for token in formatted_tokens:
+        if newline and diff:
+          if token[1] == '+':
+            token = ('diff_add', token[1])
+          if token[1] == '-':
+            token = ('diff_del', token[1])
+
         if token[1] == '\n':
           if formatted_line:
             walker.append(urwid.Text(formatted_line))
             formatted_line = []
+            newline = True
         else:
           formatted_line.append(token)
-
+          newline = False
       if formatted_line:
         walker.append(urwid.Text(list(formatted_line)))
 
@@ -260,7 +268,7 @@ def do_syntax_coloring(kv, ret, widget):
       if line.startswith("diff --git"):
         output = "".join(wlines)
 
-        add_lines_to_walker(wlines, walker, fname)
+        add_lines_to_walker(wlines, walker, fname, diff=True)
 
         # next output
         fname = line.split().pop()
@@ -268,7 +276,7 @@ def do_syntax_coloring(kv, ret, widget):
 
       wlines.append(line)
 
-    add_lines_to_walker(wlines, walker, fname)
+    add_lines_to_walker(wlines, walker, fname, diff=True)
   else:
     lines = ret['lines']
     add_lines_to_walker(lines, walker, None)
@@ -569,6 +577,8 @@ def setup_general_hooks():
 # {{{ display input
 palette = [
   ('banner', 'black', 'white'),
+  ('diff_add', 'black', 'light green'),
+  ('diff_del', 'black', 'light red'),
   ('streak', 'black', 'dark red'),
   ('bg', 'black', 'dark blue'),
 ]
