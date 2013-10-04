@@ -219,8 +219,6 @@ def do_syntax_coloring(kv, ret, widget):
   listbox = urwid.ListBox(walker)
   widget.original_widget = listbox
   syntax_colored = True
-  debug("RET", ret)
-  debug("SYNTAX COLORING", ret['lines'])
 
   formatter = UrwidFormatter()
   # special case for git diffs
@@ -234,11 +232,23 @@ def do_syntax_coloring(kv, ret, widget):
       except:
         pass
 
-      debug(fname, lexer)
       tokens = lexer.get_tokens(output)
-      formatted_tokens = list(formatter.formatgenerator(tokens))
 
-      walker.append(urwid.Text(list(formatted_tokens)))
+      # Build the syntax output up line by line, so that it can be highlighted
+      # one line at a time
+      formatted_tokens = list(formatter.formatgenerator(tokens))
+      formatted_line = []
+      for token in formatted_tokens:
+        if token[1] == '\n':
+          if formatted_line:
+            walker.append(urwid.Text(formatted_line))
+            formatted_line = []
+        else:
+          formatted_line.append(token)
+
+      if formatted_line:
+        walker.append(urwid.Text(list(formatted_line)))
+
 
   if ret['joined'].find("diff --git") >= 0:
     walker[:] = [ ]
@@ -329,8 +339,7 @@ def do_get_urls(kv, ret, widget=None):
 
   overlay_menu(widget, "Choose a URL to open", urls, func)
 
-
-def do_pipe(kv, ret, scr):
+def do_print(kv, ret, scr):
   def func():
     print ret['joined']
 
@@ -390,6 +399,9 @@ def do_general(kv, ret, widget):
   debug("Entering general mode")
   setup_general_hooks()
 
+def do_pipe_prompt(kv, ret, widget):
+  debug("ENTERING PIPE MODE")
+  kv.open_command_line('!')
 def do_search_prompt(kv, ret, widget):
   debug("ENTERING SEARCH MODE")
   kv.open_command_line('/')
@@ -404,6 +416,8 @@ def handle_command(prompt, command):
     kv.find_and_focus(command)
   if prompt == ':':
     kv.display_status_msg('Sorry, command mode is not yet implemented')
+  else:
+    kv.display_status_msg('Sorry, %s mode is not yet implemented' % (prompt))
 
 def do_command_entered(kv, ret, widget):
   if kv.in_command_prompt:
@@ -442,6 +456,10 @@ CURSES_HOOKS = {
     "fn" : do_search_prompt,
     "help" : "Enter interactive search"
   },
+  "!" : {
+    "fn" : do_pipe_prompt,
+    "help" : "Pipe kits window to another command"
+  },
   "q" : {
     "fn" : do_close_overlay_or_quit,
     "help" : "Quit kit / Close current overlay"
@@ -451,8 +469,8 @@ CURSES_HOOKS = {
     "help" : "Open interactive sed editor"
   },
   "p" : {
-    "fn" : do_pipe,
-    "help" : "Pipe kits window to another command"
+    "fn" : do_print,
+    "help" : "Print window to another command"
   },
   "c" : {
     "fn" : do_syntax_coloring,
