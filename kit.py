@@ -68,7 +68,7 @@ def debug(*args):
 
 # {{{ input
 def tokenize(lines):
-  # http://redd.it
+  # http://redd.it (example URL)
   all_tokens = []
   for index, line in enumerate(lines):
     col = 0
@@ -167,7 +167,7 @@ class OverlayStack(urwid.WidgetPlaceholder):
     if not modal_keys:
       modal_keys = {}
 
-    modal_keys.update({ "q" : CURSES_HOOKS['q'], "esc" : CURSES_HOOKS['esc'] })
+    modal_keys.update({ "q" : CURSES_HOOKS['q'], "esc" : CURSES_HOOKS['esc'], "backspace" : CURSES_HOOKS['esc'] })
     # we should install these modal keys
     _key_hooks = modal_keys
 
@@ -220,7 +220,7 @@ def readjust_display(kv, listbox, focused_index):
     kv.last_search_token.set_text((None, text))
     kv.last_search_token = listbox.body[kv.last_search_index]
     new_text, attr = kv.last_search_token.get_text()
-    kv.last_search_token.set_text(('banner', new_text))
+    kv.last_search_token.set_text(('highlight', new_text))
 
   listbox.set_focus(index)
   listbox.set_focus_valign(('fixed top', offset))
@@ -491,19 +491,13 @@ def do_edit_text(kv, ret, widget):
   ret['tokens'] = tokenize(lines)
 
 def do_yank_text(kv, ret, widget):
-  success = urwid.Text("Success")
-  listbox = urwid.ListBox([success])
-
-  widget.open_overlay(urwid.LineBox(listbox), height=3)
-
-def do_diff_text(kv, ret, widget):
-  pass
+  kv.display_status_msg("yanking buffers is still unimplemented")
 
 def do_next_search(kv, ret, widget):
   kv.find_and_focus()
 
 def do_prev_search(kv, ret, widget):
-  kv.display_status_msg("Reverse search is yet unimplemented")
+  kv.find_and_focus(reverse=True)
 
 def do_scroll_top(kv, ret, widget):
   widget.original_widget.set_focus_valign('top')
@@ -553,15 +547,15 @@ def do_open_help(kv, ret, widget):
 
   helps = []
   shortcuts = []
-  for item in _key_hooks:
+  for item in sorted(_key_hooks.keys()):
     msg = _key_hooks[item].get('help')
     if msg:
-      shortcut = urwid.Text(('banner', item))
-      shortcut.align = "right"
+      shortcut = urwid.Text([ " ", ('highlight', item[:9])])
+      shortcut.align = "left"
       help_msg = urwid.Text(msg + "  ")
       help_msg.align = "right"
 
-      columns = urwid.Columns([ ("fixed", 3, shortcut), ("weight", 90, help_msg)])
+      columns = urwid.Columns([ ("fixed", 10, shortcut), ("weight", 1, help_msg)])
       listitems.append(columns)
 
   listbox = urwid.ListBox(listitems)
@@ -593,7 +587,7 @@ CURSES_HOOKS = {
     "fn" : do_print,
     "help" : "Print window to another command"
   },
-  "c" : {
+  "s" : {
     "fn" : do_syntax_coloring,
     "help" : "turn on syntax highlights"
   },
@@ -621,10 +615,6 @@ CURSES_HOOKS = {
     "fn" : do_yank_text,
     "help" : "save the current kit output for later use"
   },
-  "d" : {
-    "fn" : do_diff_text,
-    "help" : "compare the current kit session against a previous session"
-  },
   "?" : {
     "fn" : do_open_help,
     "help" : "show this screen"
@@ -639,19 +629,19 @@ CURSES_HOOKS = {
   },
   "f" : {
     "fn" : do_get_files,
-    "help" : "dump the files from the current buffer"
+    "help" : "list the files in current buffer"
   },
   "u" : {
     "fn" : do_get_urls,
-    "help" : "dump the URLs from the current buffer"
+    "help" : "list the URLs in the current buffer"
   },
   "o" : {
     "fn" : do_get_git_objects,
-    "help" : "dump the git objects from the current buffer"
+    "help" : "dump the git objects in the current buffer"
   },
   "backspace" : {
     "fn" : do_pop_stack,
-    "help" : "visit previous buffer in stack"
+    "help" : "visit previously opened buffer"
   }
 }
 
@@ -697,6 +687,7 @@ def setup_general_hooks():
 
 # {{{ display input
 palette = [
+  ('highlight', 'white', 'dark gray'),
   ('banner', 'black', 'white'),
   ('diff_add', 'black', 'light green'),
   ('diff_del', 'black', 'light red'),
@@ -865,18 +856,28 @@ class Viewer(object):
     def find_word(tokens, start_index):
       found = False
 
-      tokens = tokens[start_index:]
+      if reverse:
+        tokens = tokens[:start_index-1]
+      else:
+        tokens = tokens[start_index:]
 
       if self.last_search_token:
         text, opts = self.last_search_token.get_text()
         self.last_search_token.set_text((None, text))
 
-      for index, tok in enumerate(tokens):
+      enum_tokens = enumerate(tokens)
+      if reverse:
+        enum_tokens = list(reversed(list(enumerate(tokens))))
+
+      for index, tok in enum_tokens:
         text, opts = tok.get_text()
         if text.find(word) >= 0:
-          debug("FOUND WORD", text)
+          debug("FOUND WORD", word, "IN", text)
           self.window.original_widget.set_focus_valign('middle')
+
           self.last_search_index = start_index + index
+          if reverse:
+            self.last_search_index = index
           self.last_search_token = tok
 
           found = True
@@ -886,7 +887,7 @@ class Viewer(object):
         found_text = self.last_search_token.get_text()[0]
         debug("INDEX OF", found_text, "IS", self.last_search_index)
         self.window.original_widget.set_focus(self.last_search_index)
-        self.last_search_token.set_text(('banner', text))
+        self.last_search_token.set_text(('highlight', text))
       return found
 
     found = find_word(tokens, start_index + 1)
@@ -900,7 +901,7 @@ class Viewer(object):
 
   def display_status_msg(self, msg):
     if type(msg) is str:
-      msg = ('banner', msg)
+      msg = ('highlight', msg)
     self.prompt.set_caption(msg)
     self.prompt.set_edit_text("")
     self.clear_edit_text = True
