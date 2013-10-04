@@ -303,9 +303,19 @@ def overlay_menu(widget, title, items, cb):
 def do_get_files(kv, ret, widget):
   tokens = ret['tokens']
   files = []
+  visited = {}
   for token in tokens:
-    if os.path.isfile(token['text']):
-      files.append(token['text'])
+    text = token['text']
+    while text:
+      if not text in visited:
+        visited[text] = True
+        if os.path.isfile(text):
+          files.append(text)
+          break
+
+      text_dirs = text.split('/')
+      text_dirs.pop(0)
+      text = '/'.join(text_dirs)
 
   if not len(files):
     files.append("No files found in document")
