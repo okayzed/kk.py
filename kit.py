@@ -201,18 +201,29 @@ class OverlayStack(urwid.WidgetPlaceholder):
 
 syntax_colored = False
 previous_widget = None
+
+def get_focus_index(widget, rows):
+  offset, inset = widget.get_focus_offset_inset((1, rows))
+  focus_widget, focus_index = widget.get_focus()
+  focused_index = focus_index - offset
+
+  return focused_index
+
 def do_syntax_coloring(kv, ret, widget):
   global previous_widget, syntax_colored
   walker = urwid.SimpleListWalker([])
 
   if previous_widget:
     original_text = widget.original_widget
+    focused_index = get_focus_index(original_text, ret['maxy'])
     widget.original_widget = previous_widget
     previous_widget = original_text
 
     debug("SYNTAX COLORING PREV WIDGET")
 
     syntax_colored = not syntax_colored
+    widget.original_widget.set_focus(focused_index)
+    widget.original_widget.set_focus_valign('top')
     return
 
 
@@ -222,6 +233,7 @@ def do_syntax_coloring(kv, ret, widget):
   listbox = urwid.ListBox(walker)
   widget.original_widget = listbox
   syntax_colored = True
+  focused_index = get_focus_index(previous_widget, ret['maxy'])
 
   formatter = UrwidFormatter()
   # special case for git diffs
@@ -318,7 +330,9 @@ def do_syntax_coloring(kv, ret, widget):
 
   # an anchor blank element for easily scrolling to bottom of this text view
   walker.append(urwid.Text(''))
-  kv.repaint_screen()
+
+  widget.original_widget.set_focus(focused_index)
+  widget.original_widget.set_focus_valign('top')
 
 def overlay_menu(widget, title, items, cb):
   def button(text, value):
@@ -749,11 +763,11 @@ class Viewer(object):
 
   def find_and_focus(self, word=None, reverse=False):
     start_index = 0
+    focused_widget, focused_index = self.window.original_widget.get_focus()
+    start_index = focused_index
+
     if not word:
       word = self.last_search
-
-    if self.last_search == word:
-      start_index = self.last_search_index
 
     self.last_search = word
 
