@@ -364,7 +364,6 @@ def overlay_menu(widget, title, items, cb):
   url_window = urwid.LineBox(listbox)
   widget.open_overlay(url_window)
 
-
 def is_git_like(obj):
   with open(os.devnull, "w") as fnull:
     ret = subprocess.call(['git', 'show', obj], stdout=fnull, stderr=fnull)
@@ -394,8 +393,7 @@ def do_get_git_objects(kv, ret, widget):
     widget.close_overlay()
     previous_widget = None
     syntax_colored = False
-    kv.ret = read_lines(lines)
-    display_lines(lines, widget)
+    kv.read_and_display(lines)
 
   overlay_menu(widget, "Choose a git object to open", files, func)
 
@@ -429,8 +427,7 @@ def do_get_files(kv, ret, widget):
         widget.close_overlay()
         previous_widget = None
         syntax_colored = False
-        kv.ret = read_lines(contents)
-        display_lines(contents, widget)
+        kv.read_and_display(contents)
     except Exception, e:
       debug("EXCEPTION", e)
 
@@ -478,6 +475,9 @@ def do_close_overlay_or_quit(kv, ret, widget):
 
 def do_quit(kv, ret, scr):
   raise urwid.ExitMainLoop()
+
+def do_pop_stack(kv, ret, scr):
+  kv.restore_last_display()
 
 def do_edit_text(kv, ret, widget):
   global previous_widget, syntax_colored
@@ -535,6 +535,8 @@ def handle_command(prompt, command):
     kv.find_and_focus(command)
   elif prompt == ':':
     kv.display_status_msg('Sorry, command mode is not yet implemented')
+  elif prompt == '!':
+    kv.pipe_and_display(command)
   else:
     kv.display_status_msg('Sorry, %s mode is not yet implemented' % (prompt))
 
@@ -647,6 +649,10 @@ CURSES_HOOKS = {
     "fn" : do_get_git_objects,
     "help" : "dump the git objects from the current buffer"
   },
+  "backspace" : {
+    "fn" : do_pop_stack,
+    "help" : "visit previous buffer in stack"
+  }
 }
 
 GENERAL_HOOKS = {
@@ -725,6 +731,7 @@ class Viewer(object):
     self.in_command_prompt = False
     self.prompt_mode = ""
     self.last_search = ""
+    self.stack = []
     self.last_search_index = 0
     self.last_search_token = None
     self.clear_edit_text = False
@@ -815,6 +822,34 @@ class Viewer(object):
     self.command_line.original_widget = prompt_cols
     self.in_command_prompt = False
     self.panes.set_focus('body')
+
+
+  def read_and_display(self, lines):
+    global previous_widget
+    previous_widget = None
+    self.stack.append(self.ret)
+    self.ret = read_lines(lines)
+    display_lines(lines, self.window)
+
+  def restore_last_display(self):
+    global previous_widget
+    previous_widget = None
+    if self.stack:
+      self.ret = self.stack.pop()
+      display_lines(self.ret['lines'], self.window)
+
+  def pipe_and_display(self, command):
+    import shlex
+    data_in = self.ret['joined']
+    args = shlex.split(command)
+    p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p.stdin.write(data_in)
+
+    stdout = p.communicate()[0]
+
+    kv.read_and_display([stdout])
+
+
 
   def find_and_focus(self, word=None, reverse=False):
     start_index = 0
