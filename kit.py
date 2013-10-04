@@ -6,19 +6,22 @@
 
 # things the kitchen sink could potentially do:
 
-# o compare two different outputs (do ad-hoc diffs)
-# o pipe buffer into a command and re-open pager
-# o yank the output into a 'buffer'
-# o search + next / prev functions
-# o sum a column
-# o sum a row
-
+# DONE
 # x locate (and open) files in the output
 # x open urls from the output
 # x add syntax highlighting to any output
 # x add syntax highlighting to git diffs
 # x open the output in an external editor
 # x locate urls in the output
+
+# TODO
+# o compare two different outputs (do ad-hoc diffs)
+# o pipe buffer into a command and re-open pager
+# o session manager for past contents
+#   o yank the output into a 'buffer'
+# o search + next / prev functions
+# o sum a column
+# o sum a row
 
 # }}}
 
