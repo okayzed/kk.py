@@ -13,15 +13,19 @@
 # x add syntax highlighting to git diffs
 # x open the output in an external editor
 # x locate urls in the output
+# x search next word
 
 # TODO
+# o create a stack for jumping between opened buffers
 # o compare two different outputs (do ad-hoc diffs)
-# o pipe buffer into a command and re-open pager
+# o pipe buffer into a command and re-open pager on new output
 # o session manager for past contents
 #   o yank the output into a 'buffer'
-# o search + next / prev functions
+# o search prev function
 # o sum a column
 # o sum a row
+# o send output to paste? (or does !bang over that?)
+# o have a mode to dump an old session from kit to stdout. (or is that just using a file?)
 
 # }}}
 
