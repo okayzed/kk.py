@@ -422,7 +422,7 @@ def handle_command(prompt, command):
   debug("Handling command", prompt, command)
   if prompt == '/':
     kv.find_and_focus(command)
-  if prompt == ':':
+  elif prompt == ':':
     kv.display_status_msg('Sorry, command mode is not yet implemented')
   else:
     kv.display_status_msg('Sorry, %s mode is not yet implemented' % (prompt))
