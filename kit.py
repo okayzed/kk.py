@@ -489,10 +489,7 @@ def do_pop_stack(kv, ret, scr):
 
 def do_edit_text(kv, ret, widget):
   lines = _get_content(os.environ["EDITOR"], ret["joined"])
-  kv.display_lines(lines)
-  ret['lines'] = lines
-  ret['joined'] = ''.join(lines)
-  ret['tokens'] = tokenize(lines)
+  kv.read_and_display(lines)
 
 def do_yank_text(kv, ret, widget):
   kv.display_status_msg("yanking buffers is still unimplemented")
