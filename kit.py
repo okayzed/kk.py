@@ -251,6 +251,7 @@ class OverlayStack(urwid.WidgetPlaceholder):
       )
 
       self.overlay_parent = self.original_widget
+      self.widget = widget
       self.overlay = overlay
 
       self.original_widget = self.overlay
@@ -288,7 +289,7 @@ def readjust_display(kv, listbox, focused_index):
 def do_syntax_coloring(kv, ret, widget):
   kv.toggle_syntax_coloring()
 
-def overlay_menu(widget, title="", items=[], focused=None, cb=None):
+def overlay_menu(widget, title="", items=[], focused=None, cb=None, modal_keys=None):
   def button(text, value):
     def button_pressed(but):
       debug("BUTTON PRESSED", title, text)
@@ -312,7 +313,7 @@ def overlay_menu(widget, title="", items=[], focused=None, cb=None):
       listbox.set_focus(index+1)
   walker.insert(0, urwid.Text(title))
 
-  widget.open_overlay(url_window)
+  widget.open_overlay(url_window, modal_keys=modal_keys)
 
 def iterate_and_match_tokens(tokens, focused_line_no, func):
   files = []
@@ -434,7 +435,28 @@ def do_get_files(kv, ret, widget):
     kv.window.original_widget.set_focus(int(line_no))
   if not len(files):
     files.append("No Files found in buffer")
-  overlay_menu(widget, title="Choose a file to open", items=files, cb=func, focused=closest_token)
+
+  def open_in_editor(kv, ret, widget):
+    box = kv.window.widget.original_widget
+    button, index = box.get_focus()
+
+    filename = button.button_text
+    split_resp = filename.split(':')
+    line_no = 0
+    if len(split_resp) == 2:
+      filename, line_no = split_resp
+    subprocess.call([os.environ['EDITOR'], filename])
+
+    widget.close_overlay()
+
+  modal_keys = {
+    "e" : {
+      "fn" : open_in_editor,
+      "help" : "",
+    }
+  }
+  overlay_menu(widget, title="Choose a file to open", items=files,
+    cb=func, focused=closest_token, modal_keys=modal_keys)
 
 def do_get_urls(kv, ret, widget=None):
   tokens = ret['tokens']
