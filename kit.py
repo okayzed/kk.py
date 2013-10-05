@@ -9,6 +9,7 @@
 # DONE
 # x locate (and open) files in the output
 # x open urls from the output
+# x preliminary terminal color support
 # x add syntax highlighting to any output
 # x add syntax highlighting to git diffs
 # x open the output in an external editor
@@ -19,12 +20,17 @@
 # x pipe buffer into a command and re-open pager on new output
 
 # TODO
+
+# o SESSIONS & CROSS SESSION ACTIVITIES
 # o compare two different outputs (do ad-hoc diffs)
+# o have a mode to dump an old session from kit to stdout
 # o session manager for past contents
 #   o yank the output into a 'buffer'
+# o MATH
 # o sum a column
 # o sum a row
-# o have a mode to dump an old session from kit to stdout
+# o generate a histogram
+# o calculate the big stats (avg, mean, etc)
 
 # }}}
 
