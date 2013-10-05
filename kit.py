@@ -14,18 +14,17 @@
 # x open the output in an external editor
 # x locate urls in the output
 # x search next word
+# x search prev function
+# x create a stack for jumping between opened buffers
+# x pipe buffer into a command and re-open pager on new output
 
 # TODO
-# o create a stack for jumping between opened buffers
 # o compare two different outputs (do ad-hoc diffs)
-# o pipe buffer into a command and re-open pager on new output
 # o session manager for past contents
 #   o yank the output into a 'buffer'
-# o search prev function
 # o sum a column
 # o sum a row
-# o send output to paste? (or does !bang over that?)
-# o have a mode to dump an old session from kit to stdout. (or is that just using a file?)
+# o have a mode to dump an old session from kit to stdout
 
 # }}}
 
@@ -633,19 +632,15 @@ CURSES_HOOKS = {
   },
   "!" : {
     "fn" : do_pipe_prompt,
-    "help" : "Pipe kits window to another command"
+    "help" : "Pipe current buffer through an external command"
   },
   "q" : {
     "fn" : do_close_overlay_or_quit,
     "help" : "Quit kit / Close current overlay"
   },
-  "s" : {
-    "fn" : do_interactive_sed,
-    "help" : "Open interactive sed editor"
-  },
   "p" : {
     "fn" : do_print,
-    "help" : "Print window to another command"
+    "help" : "Print window to stdout and quit"
   },
   "s" : {
     "fn" : do_syntax_coloring,
@@ -697,11 +692,11 @@ CURSES_HOOKS = {
   },
   "o" : {
     "fn" : do_get_git_objects,
-    "help" : "dump the git objects in the current buffer"
+    "help" : "list the git objects in the current buffer"
   },
   "backspace" : {
     "fn" : do_pop_stack,
-    "help" : "visit previously opened buffer"
+    "help" : "Visit previously opened buffer"
   }
 }
 
