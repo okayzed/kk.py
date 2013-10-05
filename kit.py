@@ -379,7 +379,6 @@ def do_syntax_coloring(kv, ret, widget):
 
     for line in ret['lines']:
       if line.startswith("diff --git"):
-        output = "".join(wlines)
 
         add_lines_to_walker(wlines, walker, fname, diff=True)
 
