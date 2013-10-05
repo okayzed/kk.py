@@ -267,9 +267,6 @@ class OverlayStack(urwid.WidgetPlaceholder):
 
 # {{{ character handlers
 
-syntax_colored = False
-previous_widget = None
-
 def get_focus_index(widget, rows):
   offset, inset = widget.get_focus_offset_inset((1, rows))
   focus_widget, focus_index = widget.get_focus()
@@ -289,176 +286,8 @@ def readjust_display(kv, listbox, focused_index):
   listbox.set_focus_valign(('fixed top', offset))
 
 def do_syntax_coloring(kv, ret, widget):
-  global previous_widget, syntax_colored
-  walker = urwid.SimpleListWalker([])
 
-  def syntax_msg():
-    if syntax_colored:
-      kv.display_status_msg("Setting syntax to %s" % kv.syntax_lang)
-    else:
-      kv.display_status_msg("Disabling syntax coloring")
-
-  if previous_widget:
-    original_text = widget.original_widget
-    focused_index = get_focus_index(original_text, ret['maxy'])
-    widget.original_widget = previous_widget
-    previous_widget = original_text
-
-    debug("SYNTAX COLORING PREV WIDGET")
-
-    syntax_colored = not syntax_colored
-    readjust_display(kv, widget.original_widget, focused_index)
-    syntax_msg()
-
-    return
-
-
-  debug("INITIALIZING SYNTAX COLORED WIDGET")
-  # one time setup
-  previous_widget = widget.original_widget
-  listbox = TextBox(walker)
-  widget.original_widget = listbox
-  syntax_colored = True
-  focused_index = get_focus_index(previous_widget, ret['maxy'])
-
-  formatter = UrwidFormatter()
-  def handle_token(token, formatted_line, newline, diff=False):
-    text = token[1]
-    if not text:
-      return newline
-
-    if newline and diff and False:
-      if text[0] == '+':
-        formatted_line.append(('diff_add', '+'))
-        text = token[1][1:]
-        token = (token[0], text)
-      elif text[0] == '-':
-        formatted_line.append(('diff_del', '-'))
-        text = token[1][1:]
-        token = (token[0], text)
-
-    if text.find('\n') >= 0:
-      split_line = clear_escape_codes(text)
-      while split_line:
-        n = split_line.find('\n')
-        if n >= 0:
-          newline = True
-          last_word = split_line[:n]
-          split_line = split_line[n+1:]
-          formatted_line.append('')
-          walker.append(urwid.Text(list(formatted_line)))
-          del formatted_line[:]
-        else:
-          formatted_line.append((token[0], split_line))
-          break
-    else:
-      token = (token[0], clear_escape_codes(token[1]))
-      formatted_line.append(token)
-      newline = False
-
-    return newline
-    # end of handle_token function
-
-
-  def add_lines_to_walker(lines, walker, fname=None, diff=False):
-    if len(lines):
-      output = "".join(lines)
-      lexer = None
-      if fname:
-        try:
-          lexer = pygments.lexers.guess_lexer_for_filename(fname, output)
-        except:
-          lexer = None
-      if not lexer:
-        lexer = guess_lexer(output)
-
-
-      debug(dir(lexer.__class__))
-
-      score = lexer.__class__.analyse_text(output)
-      if diff:
-        kv.syntax_lang = "git diff"
-        debug("LEXER (FORCED) SCORE", lexer, score)
-      else:
-        kv.syntax_lang = lexer.name
-        debug("LEXER (GUESSED) SCORE", lexer, score)
-        if score < 0.3:
-          lexer = pygments.lexers.get_lexer_by_name("bash")
-          kv.syntax_lang = "none. (Couldn't auto-detect a syntax)"
-          debug("LEXER FORCED TO BASH", lexer, score)
-
-
-      tokens = lexer.get_tokens(output)
-
-      # Build the syntax output up line by line, so that it can be highlighted
-      # one line at a time
-      formatted_tokens = list(formatter.formatgenerator(tokens))
-      formatted_line = []
-      newline = False
-
-      for token in formatted_tokens:
-        newline = handle_token(token, formatted_line, newline, diff)
-
-      if formatted_line:
-        walker.append(urwid.Text(list(formatted_line)))
-
-
-  if ret['joined'].find("diff --git") >= 0:
-    walker[:] = [ ]
-    wlines = []
-    lexer = None
-    fname = None
-
-    iterator = ret['lines'].__iter__()
-    for line in iterator:
-      line = clear_escape_codes(line)
-      if line.startswith("diff --git"):
-
-        reg_lines = [ line ]
-        def add_line():
-          reg_lines.append(clear_escape_codes(iterator.next()))
-
-        add_line()
-        add_line()
-        add_line()
-        add_line()
-
-        # Look upwards for the commit line (find the first line that starts with Author and Date)
-        # and put them in reg_lines
-
-        author_index = 1
-        for index, wline in enumerate(wlines):
-          if wline.startswith("Author"):
-            author_index = index
-
-        reg_lines = wlines[author_index-1:] + reg_lines
-        reg_lines.insert(0, "\n")
-        reg_lines.append("\n")
-        wlines = wlines[:author_index-1]
-
-        debug("WLINES", wlines)
-        debug("RLINES", reg_lines)
-
-        if wlines:
-          add_lines_to_walker(wlines, walker, fname, diff=True)
-          add_lines_to_walker(["\n"], walker, "text.txt", diff=False)
-        add_lines_to_walker(reg_lines, walker, "text.txt", diff=False)
-
-        # next output
-        fname = line.split().pop()
-        wlines = [ ]
-      else:
-        wlines.append(line)
-
-    add_lines_to_walker(wlines, walker, fname, diff=True)
-  else:
-    lines = [clear_escape_codes(line) for line in ret['lines'] ]
-    add_lines_to_walker(lines, walker, None)
-
-  # an anchor blank element for easily scrolling to bottom of this text view
-  walker.append(urwid.Text(''))
-  syntax_msg()
-  readjust_display(kv, widget.original_widget, focused_index)
+  kv.toggle_syntax_coloring()
 
 def overlay_menu(widget, title="", items=[], focused=None, cb=None):
   def button(text, value):
@@ -533,12 +362,9 @@ def do_get_git_objects(kv, ret, widget):
     files.append("No git objects found in document")
 
   def func(response):
-    global syntax_colored
     contents = subprocess.check_output(['git', 'show', response])
     lines = [contents]
     widget.close_overlay()
-    previous_widget = None
-    syntax_colored = False
     kv.read_and_display(lines)
 
   overlay_menu(widget, title="Choose a git object to open", items=files, cb=func, focused=closest_token)
@@ -663,11 +489,7 @@ def do_pop_stack(kv, ret, scr):
   kv.restore_last_display()
 
 def do_edit_text(kv, ret, widget):
-  global previous_widget, syntax_colored
-
   lines = _get_content(os.environ["EDITOR"], ret["joined"])
-  previous_widget = None
-  syntax_colored = False
   kv.display_lines(lines)
   ret['lines'] = lines
   ret['joined'] = ''.join(lines)
@@ -914,6 +736,7 @@ class Viewer(object):
     self.last_search_index = 0
     self.last_search_token = None
     self.clear_edit_text = False
+    self.syntax_colored = False
 
   def run(self, stdscr):
     ret = read_lines(None)
@@ -1029,7 +852,7 @@ class Viewer(object):
       markup = []
       stripped = line.rstrip()
       newline = False
-      if not syntax_colored:
+      if not self.syntax_colored:
         if stripped.find("\033") >= 0:
           split_strip = stripped.split("\033")
           markup.append(split_strip[0])
@@ -1081,19 +904,15 @@ class Viewer(object):
     text = TextBox(walker)
     widget.original_widget = text
 
+    self.syntax_colored = False
+    self.previous_widget = None
+
   def read_and_display(self, lines):
-    global previous_widget
-    previous_widget = None
-    syntax_colored = False
     self.stack.append(self.ret)
     self.ret = read_lines(lines)
     self.display_lines(lines)
 
   def restore_last_display(self):
-    global previous_widget
-    global syntax_colored
-    previous_widget = None
-    syntax_colored = False
     if self.stack:
       self.ret = self.stack.pop()
       self.display_lines(self.ret['lines'])
@@ -1167,6 +986,181 @@ class Viewer(object):
 
       if not found:
         kv.display_status_msg("Pattern not found  (Press RETURN)")
+
+  def syntax_msg(self):
+    if self.syntax_colored:
+      self.display_status_msg("Setting syntax to %s" % self.syntax_lang)
+    else:
+      self.display_status_msg("Disabling syntax coloring")
+
+  def toggle_syntax_coloring(self):
+    # a shortcut
+    if self.previous_widget:
+      original_text = self.window.original_widget
+      focused_index = get_focus_index(original_text, self.ret['maxy'])
+      self.window.original_widget = self.previous_widget
+      self.previous_widget = original_text
+
+      debug("SYNTAX COLORING PREV WIDGET")
+
+      self.syntax_colored = not self.syntax_colored
+      readjust_display(self, self.window.original_widget, focused_index)
+      self.syntax_msg()
+
+      return
+
+    self.enable_syntax_coloring()
+
+
+  # one time setup for syntax coloring
+  def enable_syntax_coloring(self):
+    debug("INITIALIZING SYNTAX COLORED WIDGET")
+    walker = urwid.SimpleListWalker([])
+
+    self.previous_widget = self.window.original_widget
+    listbox = TextBox(walker)
+    self.window.original_widget = listbox
+    self.syntax_colored = True
+    focused_index = get_focus_index(self.previous_widget, self.ret['maxy'])
+
+    formatter = UrwidFormatter()
+    def handle_token(token, formatted_line, newline, diff=False):
+      text = token[1]
+      if not text:
+        return newline
+
+      if newline and diff and False:
+        if text[0] == '+':
+          formatted_line.append(('diff_add', '+'))
+          text = token[1][1:]
+          token = (token[0], text)
+        elif text[0] == '-':
+          formatted_line.append(('diff_del', '-'))
+          text = token[1][1:]
+          token = (token[0], text)
+
+      if text.find('\n') >= 0:
+        split_line = clear_escape_codes(text)
+        while split_line:
+          n = split_line.find('\n')
+          if n >= 0:
+            newline = True
+            last_word = split_line[:n]
+            split_line = split_line[n+1:]
+            formatted_line.append('')
+            walker.append(urwid.Text(list(formatted_line)))
+            del formatted_line[:]
+          else:
+            formatted_line.append((token[0], split_line))
+            break
+      else:
+        token = (token[0], clear_escape_codes(token[1]))
+        formatted_line.append(token)
+        newline = False
+
+      return newline
+      # end of handle_token function
+
+
+    def add_lines_to_walker(lines, walker, fname=None, diff=False):
+      if len(lines):
+        output = "".join(lines)
+        lexer = None
+        if fname:
+          try:
+            lexer = pygments.lexers.guess_lexer_for_filename(fname, output)
+          except:
+            lexer = None
+        if not lexer:
+          lexer = guess_lexer(output)
+
+
+        debug(dir(lexer.__class__))
+
+        score = lexer.__class__.analyse_text(output)
+        if diff:
+          kv.syntax_lang = "git diff"
+          debug("LEXER (FORCED) SCORE", lexer, score)
+        else:
+          kv.syntax_lang = lexer.name
+          debug("LEXER (GUESSED) SCORE", lexer, score)
+          if score < 0.3:
+            lexer = pygments.lexers.get_lexer_by_name("bash")
+            kv.syntax_lang = "none. (Couldn't auto-detect a syntax)"
+            debug("LEXER FORCED TO BASH", lexer, score)
+
+
+        tokens = lexer.get_tokens(output)
+
+        # Build the syntax output up line by line, so that it can be highlighted
+        # one line at a time
+        formatted_tokens = list(formatter.formatgenerator(tokens))
+        formatted_line = []
+        newline = False
+
+        for token in formatted_tokens:
+          newline = handle_token(token, formatted_line, newline, diff)
+
+        if formatted_line:
+          walker.append(urwid.Text(list(formatted_line)))
+
+
+    if self.ret['joined'].find("diff --git") >= 0:
+      walker[:] = [ ]
+      wlines = []
+      lexer = None
+      fname = None
+
+      iterator = self.ret['lines'].__iter__()
+      for line in iterator:
+        line = clear_escape_codes(line)
+        if line.startswith("diff --git"):
+
+          reg_lines = [ line ]
+          def add_line():
+            reg_lines.append(clear_escape_codes(iterator.next()))
+
+          add_line()
+          add_line()
+          add_line()
+          add_line()
+
+          # Look upwards for the commit line (find the first line that starts with Author and Date)
+          # and put them in reg_lines
+
+          author_index = 1
+          for index, wline in enumerate(wlines):
+            if wline.startswith("Author"):
+              author_index = index
+
+          reg_lines = wlines[author_index-1:] + reg_lines
+          reg_lines.insert(0, "\n")
+          reg_lines.append("\n")
+          wlines = wlines[:author_index-1]
+
+          debug("WLINES", wlines)
+          debug("RLINES", reg_lines)
+
+          if wlines:
+            add_lines_to_walker(wlines, walker, fname, diff=True)
+            add_lines_to_walker(["\n"], walker, "text.txt", diff=False)
+          add_lines_to_walker(reg_lines, walker, "text.txt", diff=False)
+
+          # next output
+          fname = line.split().pop()
+          wlines = [ ]
+        else:
+          wlines.append(line)
+
+      add_lines_to_walker(wlines, walker, fname, diff=True)
+    else:
+      lines = [clear_escape_codes(line) for line in self.ret['lines'] ]
+      add_lines_to_walker(lines, walker, None)
+
+    # an anchor blank element for easily scrolling to bottom of this text view
+    walker.append(urwid.Text(''))
+    readjust_display(kv, self.window.original_widget, focused_index)
+    self.syntax_msg()
 
 
   def display_status_msg(self, msg):
