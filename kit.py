@@ -98,7 +98,6 @@ def read_lines(in_lines=None):
   maxx = 0
   numlines = 0
   content = False
-  debug("LIENS", in_lines)
 
   if not in_lines:
     in_lines = list(sys.stdin.readlines())
@@ -203,8 +202,6 @@ class TextBox(urwid.ListBox):
       if not start_index:
         start_index = end_index - size[1]
 
-    debug(start_index, end_index)
-
     end_index = end_index or size[1]
     middle = abs(end_index - start_index) / 2 + start_index
 
@@ -307,7 +304,6 @@ def do_syntax_coloring(kv, ret, widget):
   formatter = UrwidFormatter()
   def handle_token(token, formatted_line, newline, diff=False):
     text = token[1]
-    debug("HANDLING TOKEN", newline, diff, repr(text))
     if not text:
       return newline
 
@@ -440,7 +436,6 @@ def iterate_and_match_tokens(tokens, focused_line_no, func):
       ret = func(text, visited)
       if ret:
         closeness = abs(focused_line_no - token['line'])
-        debug("DISTANCE", text, closeness)
         if closeness < cur_closest_distance:
           cur_closest_distance = closeness
           closest_token = ret
@@ -462,7 +457,6 @@ def is_git_like(obj):
 
 def do_get_git_objects(kv, ret, widget):
   def git_matcher(filename, visited):
-    debug("GIT MATCHING", filename)
     if re.search('^\w*\d*\w\d(\d|\w)+$', filename):
       debug("GIT HASH?", filename)
       if is_git_like(filename):
@@ -473,8 +467,6 @@ def do_get_git_objects(kv, ret, widget):
 
   if not len(files):
     files.append("No git objects found in document")
-
-  debug("Closest token to line", closest_token)
 
   def func(response):
     contents = subprocess.check_output(['git', 'show', response])
@@ -631,7 +623,6 @@ def do_scroll_top(kv, ret, widget):
 
 def do_scroll_bottom(kv, ret, widget):
   widget.original_widget.set_focus_valign("bottom")
-  debug(widget.original_widget.body[-1])
   widget.original_widget.set_focus(len(widget.original_widget.body) + 1)
 
 def do_general(kv, ret, widget):
