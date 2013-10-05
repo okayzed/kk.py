@@ -423,11 +423,16 @@ def overlay_menu(widget, title="", items=[], focused=None, cb=None):
 
   widget.open_overlay(url_window)
 
+CHECKED_GIT = {}
 def is_git_like(obj):
+  if obj in CHECKED_GIT:
+    return CHECKED_GIT[obj]
+
   with open(os.devnull, "w") as fnull:
     ret = subprocess.call(['git', 'show', obj], stdout=fnull, stderr=fnull)
+    CHECKED_GIT[obj] = ret == 0
 
-  return ret == 0
+  return CHECKED_GIT[obj]
 
 def iterate_and_match_tokens(tokens, focused_line_no, func):
   files = []
@@ -480,16 +485,16 @@ def do_get_git_objects(kv, ret, widget):
 
 
 
+CHECKED_FILES = {}
 def do_get_files(kv, ret, widget):
-  checked_files = {}
 
   def check_file(filename, line_no):
     numberedname = filename + ":" + str(line_no)
 
-    if not numberedname in checked_files:
-      checked_files[numberedname] = os.path.isfile(filename)
+    if not numberedname in CHECKED_FILES:
+      CHECKED_FILES[numberedname] = os.path.isfile(filename)
 
-    if checked_files[numberedname]:
+    if CHECKED_FILES[numberedname]:
       return numberedname
     else:
       return
@@ -702,7 +707,7 @@ CURSES_HOOKS = {
   },
   "q" : {
     "fn" : do_back_or_quit,
-    "help" : "Quit kit / Close current overlay"
+    "help" : "Close current buffer. if there are no buffers left, quit"
   },
   "p" : {
     "fn" : do_print,
