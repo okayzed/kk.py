@@ -611,7 +611,7 @@ def do_edit_text(kv, ret, widget):
   lines = _get_content(os.environ["EDITOR"], ret["joined"])
   previous_widget = None
   syntax_colored = False
-  display_lines(lines, widget)
+  kv.display_lines(lines)
   ret['lines'] = lines
   ret['joined'] = ''.join(lines)
   ret['tokens'] = tokenize(lines)
@@ -822,19 +822,6 @@ palette = [
 ]
 
 
-def display_lines(lines, widget):
-  wlist = []
-  for line in lines:
-    col = 0
-    stripped = line.lstrip()
-    col = len(line) - len(stripped)
-
-    wlist.append(urwid.Text(line.rstrip()))
-
-  walker = urwid.SimpleListWalker(wlist)
-  text = TextBox(walker)
-  widget.original_widget = text
-
 # }}}
 
 # {{{ main viewer class
@@ -915,7 +902,7 @@ class Viewer(object):
     self.window = widget
 
     self.panes = urwid.Frame(widget, footer=self.command_line)
-    display_lines(ret["lines"], widget)
+    self.display_lines(ret["lines"])
 
     self.loop = urwid.MainLoop(self.panes, palette, unhandled_input=unhandle_input, input_filter=handle_input)
 
@@ -942,20 +929,34 @@ class Viewer(object):
     self.panes.set_focus('body')
 
 
+  def display_lines(self, lines):
+    widget = self.window
+    wlist = []
+    for line in lines:
+      col = 0
+      stripped = line.lstrip()
+      col = len(line) - len(stripped)
+
+      wlist.append(urwid.Text(line.rstrip()))
+
+    walker = urwid.SimpleListWalker(wlist)
+    text = TextBox(walker)
+    widget.original_widget = text
+
   def read_and_display(self, lines):
     global previous_widget
     previous_widget = None
     syntax_colored = False
     self.stack.append(self.ret)
     self.ret = read_lines(lines)
-    display_lines(lines, self.window)
+    self.display_lines(lines)
 
   def restore_last_display(self):
     global previous_widget
     previous_widget = None
     if self.stack:
       self.ret = self.stack.pop()
-      display_lines(self.ret['lines'], self.window)
+      self.display_lines(self.ret['lines'])
 
   def pipe_and_display(self, command):
     import shlex
@@ -1045,3 +1046,5 @@ if __name__ == "__main__":
       except Exception, e:
         raise e
 # }}}
+
+# vim: set foldmethod marker
