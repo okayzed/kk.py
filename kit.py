@@ -440,6 +440,10 @@ def do_get_files(kv, ret, widget):
     box = kv.window.widget.original_widget
     button, index = box.get_focus()
 
+    # assuming first line is not a file
+    if not index:
+      return
+
     filename = button.button_text
     split_resp = filename.split(':')
     line_no = 0
