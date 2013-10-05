@@ -157,7 +157,6 @@ def _get_content(editor, initial=""):
 # }}}
 
 # {{{ TextBox widget
-
 class TextBox(urwid.ListBox):
   def __init__(self, *args, **kwargs):
     self.last_focused_lines = []
@@ -202,10 +201,8 @@ class TextBox(urwid.ListBox):
     middle = abs(end_index - start_index) / 2 + start_index
 
     self.middle_position = middle
-
-
-
 # }}}
+
 # {{{ overlay widget
 class OverlayStack(urwid.WidgetPlaceholder):
   def __init__(self, *args, **kwargs):
@@ -263,7 +260,6 @@ def get_focus_index(widget, rows):
   return focus_index, offset
 
 def readjust_display(kv, listbox, focused_index):
-
   index, offset = focused_index
   if kv.last_search_token:
     text, attr = kv.last_search_token.get_text()
@@ -423,17 +419,6 @@ def overlay_menu(widget, title="", items=[], focused=None, cb=None):
 
   widget.open_overlay(url_window)
 
-CHECKED_GIT = {}
-def is_git_like(obj):
-  if obj in CHECKED_GIT:
-    return CHECKED_GIT[obj]
-
-  with open(os.devnull, "w") as fnull:
-    ret = subprocess.call(['git', 'show', obj], stdout=fnull, stderr=fnull)
-    CHECKED_GIT[obj] = ret == 0
-
-  return CHECKED_GIT[obj]
-
 def iterate_and_match_tokens(tokens, focused_line_no, func):
   files = []
   visited = {}
@@ -456,6 +441,17 @@ def iterate_and_match_tokens(tokens, focused_line_no, func):
         files.append(ret)
 
   return (files, closest_token)
+
+CHECKED_GIT = {}
+def is_git_like(obj):
+  if obj in CHECKED_GIT:
+    return CHECKED_GIT[obj]
+
+  with open(os.devnull, "w") as fnull:
+    ret = subprocess.call(['git', 'show', obj], stdout=fnull, stderr=fnull)
+    CHECKED_GIT[obj] = ret == 0
+
+  return CHECKED_GIT[obj]
 
 def do_get_git_objects(kv, ret, widget):
   def git_matcher(filename, visited):
@@ -577,9 +573,6 @@ def do_print(kv, ret, scr):
 
   kv.after_urwid.append(func)
   raise urwid.ExitMainLoop()
-
-def do_interactive_sed(kv, ret, scr=None):
-  pass
 
 def do_back_or_quit(kv, ret, widget):
   if widget.overlay_opened:
