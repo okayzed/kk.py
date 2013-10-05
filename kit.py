@@ -424,11 +424,12 @@ def do_syntax_coloring(kv, ret, widget):
         # Look upwards for the commit line (find the first line that starts with Author and Date)
         # and put them in reg_lines
 
+        author_index = 1
         for index, wline in enumerate(wlines):
           if wline.startswith("Author"):
             author_index = index
 
-        reg_lines = wlines[author_index-1:] + reg_lines 
+        reg_lines = wlines[author_index-1:] + reg_lines
         reg_lines.insert(0, "\n")
         reg_lines.append("\n")
         wlines = wlines[:author_index-1]
@@ -1088,6 +1089,7 @@ class Viewer(object):
 
   def restore_last_display(self):
     global previous_widget
+    global syntax_colored
     previous_widget = None
     syntax_colored = False
     if self.stack:
