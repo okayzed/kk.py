@@ -689,27 +689,27 @@ def do_open_help(kv, ret, widget):
 CURSES_HOOKS = {
   ":" : {
     "fn" : do_command_prompt,
-    "help" : "Enter command mode",
+    "help" : "enter command mode",
   },
   "/" : {
     "fn" : do_search_prompt,
-    "help" : "Enter interactive search"
+    "help" : "enter interactive search"
   },
   "!" : {
     "fn" : do_pipe_prompt,
-    "help" : "Pipe current buffer through an external command"
+    "help" : "pipe current buffer through an external command"
   },
   "Q" : {
     "fn" : do_close_overlay_or_quit,
-    "help" : "Quit kit / Close current overlay"
+    "help" : "quit kit / close current overlay"
   },
   "q" : {
     "fn" : do_back_or_quit,
-    "help" : "Close current buffer. if there are no buffers left, quit"
+    "help" : "close current buffer. if there are no buffers left, quit"
   },
   "p" : {
     "fn" : do_print,
-    "help" : "Print window to stdout and quit"
+    "help" : "print buffer to stdout and quit"
   },
   "s" : {
     "fn" : do_syntax_coloring,
@@ -765,7 +765,7 @@ CURSES_HOOKS = {
   },
   "backspace" : {
     "fn" : do_pop_stack,
-    "help" : "Visit previously opened buffer"
+    "help" : "visit previously opened buffer"
   }
 }
 
