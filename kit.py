@@ -907,13 +907,18 @@ class Viewer(object):
 
   def read_and_display(self, lines):
     self.stack.append(self.ret)
+    self.ret['focused_index'] = get_focus_index(self.window.original_widget, self.ret['maxy'])
+
     self.ret = read_lines(lines)
     self.display_lines(lines)
 
   def restore_last_display(self):
     if self.stack:
       self.ret = self.stack.pop()
+
       self.display_lines(self.ret['lines'])
+      if 'focused_index' in self.ret:
+        readjust_display(self, self.window.original_widget, self.ret['focused_index'])
 
   def pipe_and_display(self, command):
     import shlex
