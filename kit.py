@@ -286,7 +286,6 @@ def readjust_display(kv, listbox, focused_index):
   listbox.set_focus_valign(('fixed top', offset))
 
 def do_syntax_coloring(kv, ret, widget):
-
   kv.toggle_syntax_coloring()
 
 def overlay_menu(widget, title="", items=[], focused=None, cb=None):
@@ -704,7 +703,7 @@ COLOR_NAMES = {
    "black": "black",
    "red": "dark red",
    "green": "dark green",
-   "yellow": "yellow",
+   "yellow": "brown",
    "blue": "dark blue",
    "magenta": "dark magenta",
    "cyan": "dark cyan",
@@ -897,15 +896,17 @@ class Viewer(object):
     return wlist
 
   def display_lines(self, lines):
+    self.syntax_colored = False
+    self.previous_widget = None
+
     widget = self.window
+
+    debug("DISPLAYING LINES", lines)
 
     wlist = self.escape_ansi_colors(lines)
     walker = urwid.SimpleListWalker(wlist)
     text = TextBox(walker)
     widget.original_widget = text
-
-    self.syntax_colored = False
-    self.previous_widget = None
 
   def read_and_display(self, lines):
     self.stack.append(self.ret)
@@ -1066,16 +1067,14 @@ class Viewer(object):
       if len(lines):
         output = "".join(lines)
         lexer = None
-        if fname:
-          try:
-            lexer = pygments.lexers.guess_lexer_for_filename(fname, output)
-          except:
-            lexer = None
+
+        try:
+          lexer = pygments.lexers.guess_lexer_for_filename(fname, output)
+        except:
+          pass
+
         if not lexer:
           lexer = guess_lexer(output)
-
-
-        debug(dir(lexer.__class__))
 
         score = lexer.__class__.analyse_text(output)
         if diff:
@@ -1085,10 +1084,14 @@ class Viewer(object):
           kv.syntax_lang = lexer.name
           debug("LEXER (GUESSED) SCORE", lexer, score)
           if score < 0.3:
-            lexer = pygments.lexers.get_lexer_by_name("bash")
+            # COULDNT FIGURE OUT A GOOD SYNTAX HIGHLIGHTER
+            # DISABLE IT
+            lexer = pygments.lexers.get_lexer_by_name('text')
             kv.syntax_lang = "none. (Couldn't auto-detect a syntax)"
-            debug("LEXER FORCED TO BASH", lexer, score)
 
+            lines = self.escape_ansi_colors([line.rstrip() for line in lines])
+            walker.extend(lines)
+            return
 
         tokens = lexer.get_tokens(output)
 
@@ -1134,12 +1137,7 @@ class Viewer(object):
               author_index = index
 
           reg_lines = wlines[author_index-1:] + reg_lines
-          reg_lines.insert(0, "\n")
-          reg_lines.append("\n")
           wlines = wlines[:author_index-1]
-
-          debug("WLINES", wlines)
-          debug("RLINES", reg_lines)
 
           if wlines:
             add_lines_to_walker(wlines, walker, fname, diff=True)
