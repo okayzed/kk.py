@@ -157,6 +157,65 @@ def _get_content(editor, initial=""):
         return result
 # }}}
 
+# {{{ TextBox widget
+
+class TextBox(urwid.ListBox):
+  def __init__(self, *args, **kwargs):
+    self.last_focused_lines = []
+    return super(TextBox, self).__init__(*args, **kwargs)
+
+  def render(self, size, focus=False):
+    self.highlight_middle(size, focus)
+    return super(TextBox, self).render(size, focus)
+
+  def highlight_middle(self, size, focus):
+    return
+
+    vis = self.calculate_visible(size, focus)
+    if self.last_focused_lines:
+      for line in self.last_focused_lines:
+        line.set_text((prev_style, line.get_text()[0]))
+
+    top_trimmed_rows = vis[1][1]
+    bot_trimmed_rows = vis[2][1]
+
+
+    def highlight_line(line_no):
+      try:
+        focus_widget = self.body[line_no]
+        if focus_widget:
+          text = focus_widget.get_text()[0]
+          focus_widget.prev_style = focus_widget.get_text()[0]
+          focus_widget.set_text(('highlight', text))
+          self.last_focused_lines.append(focus_widget)
+      except:
+        return
+
+    # Figure out what the middle line is, so we can highlight it
+    start_index = 0
+    top_visible = None
+    bottom_visible = None
+    end_index = None
+    if top_trimmed_rows:
+      top_visible = top_trimmed_rows[-1]
+      start_index = top_visible[1]
+      end_index = size[1] + start_index
+
+    if bot_trimmed_rows:
+      bottom_visible = bot_trimmed_rows[-1]
+      end_index = bottom_visible[1]
+      if not start_index:
+        start_index = end_index - size[1]
+
+    debug(start_index, end_index)
+
+    end_index = end_index or size[1]
+    middle = abs(end_index - start_index) / 2 + start_index
+    highlight_line(middle)
+
+
+
+# }}}
 # {{{ overlay widget
 class OverlayStack(urwid.WidgetPlaceholder):
   def __init__(self, *args, **kwargs):
@@ -247,7 +306,7 @@ def do_syntax_coloring(kv, ret, widget):
   debug("INITIALIZING SYNTAX COLORED WIDGET")
   # one time setup
   previous_widget = widget.original_widget
-  listbox = urwid.ListBox(walker)
+  listbox = TextBox(walker)
   widget.original_widget = listbox
   syntax_colored = True
   focused_index = get_focus_index(previous_widget, ret['maxy'])
@@ -559,7 +618,7 @@ def do_open_help(kv, ret, widget):
       columns = urwid.Columns([ ("fixed", 10, shortcut), ("weight", 1, help_msg)])
       listitems.append(columns)
 
-  listbox = urwid.ListBox(listitems)
+  listbox = TextBox(listitems)
   widget.open_overlay(urwid.LineBox(listbox),
     width=("relative", 80), height=("relative", 80))
 
@@ -707,7 +766,7 @@ def display_lines(lines, widget):
     wlist.append(urwid.Text(line.rstrip()))
 
   walker = urwid.SimpleListWalker(wlist)
-  text = urwid.ListBox(walker)
+  text = TextBox(walker)
   widget.original_widget = text
 
 # }}}
@@ -760,6 +819,7 @@ class Viewer(object):
       if was_general:
         _key_hooks = CURSES_HOOKS
         return []
+
 
       return unhandled
 
