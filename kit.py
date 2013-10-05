@@ -34,6 +34,7 @@
 
 # {{{ imports
 import curses
+import collections
 import itertools
 import os
 import re
@@ -50,6 +51,11 @@ from pygments.lexers import guess_lexer
 # }}}
 
 # {{{ util
+def consume(iterator, n):
+  '''Advance the iterator n-steps ahead. If n is none, consume entirely.'''
+  collections.deque(itertools.islice(iterator, n), maxlen=0)
+
+
 def clear_escape_codes(line):
   # clear color codes
   newline = re.sub('\033\[\d*;?\d*m', '', line)
@@ -284,6 +290,12 @@ def do_syntax_coloring(kv, ret, widget):
   global previous_widget, syntax_colored
   walker = urwid.SimpleListWalker([])
 
+  def syntax_msg():
+    if syntax_colored:
+      kv.display_status_msg("Setting syntax to %s" % kv.syntax_lang)
+    else:
+      kv.display_status_msg("Disabling syntax coloring")
+
   if previous_widget:
     original_text = widget.original_widget
     focused_index = get_focus_index(original_text, ret['maxy'])
@@ -294,6 +306,8 @@ def do_syntax_coloring(kv, ret, widget):
 
     syntax_colored = not syntax_colored
     readjust_display(kv, widget.original_widget, focused_index)
+    syntax_msg()
+
     return
 
 
@@ -313,7 +327,6 @@ def do_syntax_coloring(kv, ret, widget):
 
     if newline and diff and False:
       if text[0] == '+':
-        debug("DIFF ADD")
         formatted_line.append(('diff_add', '+'))
         text = token[1][1:]
         token = (token[0], text)
@@ -321,7 +334,6 @@ def do_syntax_coloring(kv, ret, widget):
         formatted_line.append(('diff_del', '-'))
         text = token[1][1:]
         token = (token[0], text)
-        debug("DIFF DEL")
 
     if text.find('\n') >= 0:
       split_line = clear_escape_codes(text)
@@ -349,12 +361,30 @@ def do_syntax_coloring(kv, ret, widget):
   def add_lines_to_walker(lines, walker, fname=None, diff=False):
     if len(lines):
       output = "".join(lines)
-      lexer = guess_lexer(output)
-      try:
-        if fname:
+      lexer = None
+      if fname:
+        try:
           lexer = pygments.lexers.guess_lexer_for_filename(fname, output)
-      except:
-        pass
+        except:
+          lexer = None
+      if not lexer:
+        lexer = guess_lexer(output)
+
+
+      debug(dir(lexer.__class__))
+
+      score = lexer.__class__.analyse_text(output)
+      if diff:
+        kv.syntax_lang = "git diff"
+        debug("LEXER (FORCED) SCORE", lexer, score)
+      else:
+        kv.syntax_lang = lexer.name
+        debug("LEXER (GUESSED) SCORE", lexer, score)
+        if score < 0.3:
+          lexer = pygments.lexers.get_lexer_by_name("bash")
+          kv.syntax_lang = "none. (Couldn't auto-detect a syntax)"
+          debug("LEXER FORCED TO BASH", lexer, score)
+
 
       tokens = lexer.get_tokens(output)
 
@@ -367,8 +397,6 @@ def do_syntax_coloring(kv, ret, widget):
       for token in formatted_tokens:
         newline = handle_token(token, formatted_line, newline, diff)
 
-      formatted_line.append('')
-
       if formatted_line:
         walker.append(urwid.Text(list(formatted_line)))
 
@@ -379,17 +407,45 @@ def do_syntax_coloring(kv, ret, widget):
     lexer = None
     fname = None
 
-    for line in ret['lines']:
+    iterator = ret['lines'].__iter__()
+    for line in iterator:
       line = clear_escape_codes(line)
       if line.startswith("diff --git"):
 
-        add_lines_to_walker(wlines, walker, fname, diff=True)
+        reg_lines = [ line ]
+        def add_line():
+          reg_lines.append(clear_escape_codes(iterator.next()))
+
+        add_line()
+        add_line()
+        add_line()
+        add_line()
+
+        # Look upwards for the commit line (find the first line that starts with Author and Date)
+        # and put them in reg_lines
+
+        for index, wline in enumerate(wlines):
+          if wline.startswith("Author"):
+            author_index = index
+
+        reg_lines = wlines[author_index-1:] + reg_lines 
+        reg_lines.insert(0, "\n")
+        reg_lines.append("\n")
+        wlines = wlines[:author_index-1]
+
+        debug("WLINES", wlines)
+        debug("RLINES", reg_lines)
+
+        if wlines:
+          add_lines_to_walker(wlines, walker, fname, diff=True)
+          add_lines_to_walker(["\n"], walker, "text.txt", diff=False)
+        add_lines_to_walker(reg_lines, walker, "text.txt", diff=False)
 
         # next output
         fname = line.split().pop()
         wlines = [ ]
-
-      wlines.append(line)
+      else:
+        wlines.append(line)
 
     add_lines_to_walker(wlines, walker, fname, diff=True)
   else:
@@ -398,6 +454,7 @@ def do_syntax_coloring(kv, ret, widget):
 
   # an anchor blank element for easily scrolling to bottom of this text view
   walker.append(urwid.Text(''))
+  syntax_msg()
   readjust_display(kv, widget.original_widget, focused_index)
 
 def overlay_menu(widget, title="", items=[], focused=None, cb=None):
@@ -473,6 +530,7 @@ def do_get_git_objects(kv, ret, widget):
     files.append("No git objects found in document")
 
   def func(response):
+    global syntax_colored
     contents = subprocess.check_output(['git', 'show', response])
     lines = [contents]
     widget.close_overlay()
@@ -992,9 +1050,7 @@ class Viewer(object):
               attr = None
 
             if text:
-              debug("ATTR", attr)
               if attr in table:
-                debug("TABLE ATTR", attr, table[attr])
                 markup.append((table[attr], text))
               else:
                 markup.append((None, text))
