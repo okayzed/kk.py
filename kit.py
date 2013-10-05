@@ -47,9 +47,11 @@ from pygments.lexers import guess_lexer
 
 # {{{ util
 def clear_escape_codes(line):
-  line = re.sub('\033\[\d*m', '', line)
-  debug(line)
-  return line
+  newline = re.sub('\033\[\d*;?\d*m', '', line)
+
+  # Jank escape code clearing methodology
+  newline = re.sub('\033\[\d*[ABCDEFGHIJK]', '', newline)
+  return newline
 
 def add_vim_movement():
   updatedMappings = {
@@ -303,7 +305,6 @@ def do_syntax_coloring(kv, ret, widget):
   focused_index = get_focus_index(previous_widget, ret['maxy'])
 
   formatter = UrwidFormatter()
-  # special case for git diffs
   def handle_token(token, formatted_line, newline, diff=False):
     text = token[1]
     debug("HANDLING TOKEN", newline, diff, repr(text))
@@ -323,7 +324,7 @@ def do_syntax_coloring(kv, ret, widget):
         debug("DIFF DEL")
 
     if text.find('\n') >= 0:
-      split_line = text
+      split_line = clear_escape_codes(text)
       while split_line:
         n = split_line.find('\n')
         if n >= 0:
@@ -337,6 +338,7 @@ def do_syntax_coloring(kv, ret, widget):
           formatted_line.append((token[0], split_line))
           break
     else:
+      token = (token[0], clear_escape_codes(token[1]))
       formatted_line.append(token)
       newline = False
 
@@ -391,7 +393,7 @@ def do_syntax_coloring(kv, ret, widget):
 
     add_lines_to_walker(wlines, walker, fname, diff=True)
   else:
-    lines = ret['lines']
+    lines = [clear_escape_codes(line) for line in ret['lines'] ]
     add_lines_to_walker(lines, walker, None)
 
   # an anchor blank element for easily scrolling to bottom of this text view
@@ -835,6 +837,9 @@ for color in COLORS:
   palette.append(('%s_bg' % (color), 'black', COLOR_NAMES[color]))
   palette.append(('%s_fg' % (color), COLOR_NAMES[color], 'black'))
 
+  for jcolor in COLORS:
+    palette.append(('%s_%s' % (color, jcolor), COLOR_NAMES[color], COLOR_NAMES[jcolor]))
+
 
 # }}}
 
@@ -949,8 +954,13 @@ class Viewer(object):
 
       for index, color in enumerate(COLORS):
         table["[%s" % (30 + index)] = "%s_fg" % color
+        table["[1;%s" % (30 + index)] = "%s_fg" % color
       for index, color in enumerate(COLORS):
         table["[%s" % (40 + index)] = "%s_bg" % color
+        table["[%s" % (40 + index)] = "%s_bg" % color
+      for index, color in enumerate(COLORS):
+        for jindex, jcolor in enumerate(COLORS):
+          table["[%s;%s" % (30+index, 40 + jindex)] = "%s_%s" % (color, jcolor)
 
       return table
 
@@ -968,9 +978,28 @@ class Viewer(object):
           split_strip = stripped.split("\033")
           markup.append(split_strip[0])
           for at in split_strip[1:]:
-            attr, text = at.split("m",1)
+
+            # Try colors
+            split_at = at.split("m",1)
+
+            if len(split_at) > 1:
+              attr, text = split_at
+            else:
+              # If not a color but an escape code, just swallow it
+              text = at
+              split_index = re.search("[KABCDEF]", text).start()
+              if split_index >= 0:
+                split_at = [at[:split_index+1], at[split_index+1:]]
+
+                if len(split_at) > 1:
+                  text = split_at.pop()
+
+              attr = None
+
             if text:
-              if attr in table: 
+              debug("ATTR", attr)
+              if attr in table:
+                debug("TABLE ATTR", attr, table[attr])
                 markup.append((table[attr], text))
               else:
                 markup.append((None, text))
