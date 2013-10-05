@@ -418,7 +418,7 @@ def overlay_menu(widget, title="", items=[], focused=None, cb=None):
       debug("FOCUSED ITEM")
       # Need to account for the insertion of the title at the start (below), so
       # we add 1
-      listbox.set_focus(index+1) 
+      listbox.set_focus(index+1)
   walker.insert(0, urwid.Text(title))
 
   widget.open_overlay(url_window)
@@ -481,21 +481,58 @@ def do_get_git_objects(kv, ret, widget):
 
 
 def do_get_files(kv, ret, widget):
-  def file_matcher(text, visited):
-    while text:
-      if not text in visited:
-        visited[text] = True
-        if os.path.isfile(text):
-          return text
+  checked_files = {}
 
-      text_dirs = text.split('/')
+  def check_file(filename, line_no):
+    numberedname = filename + ":" + str(line_no)
+
+    if not numberedname in checked_files:
+      checked_files[numberedname] = os.path.isfile(filename)
+
+    if checked_files[numberedname]:
+      return numberedname
+    else:
+      return
+
+  def file_matcher(text, visited):
+    dir_text = text
+    colon_text = text
+    line_no = 0
+
+    while dir_text:
+      if not dir_text in visited:
+        visited[dir_text] = True
+        filename = check_file(dir_text, line_no)
+        if filename:
+          return filename
+
+      text_dirs = dir_text.split('/')
       text_dirs.pop(0)
-      text = '/'.join(text_dirs)
+      dir_text = '/'.join(text_dirs)
+
+    while colon_text:
+      if not colon_text + ":" + str(line_no) in visited:
+        visited[colon_text + str(line_no)] = True
+        if check_file(colon_text, line_no):
+          return colon_text + ":" + str(line_no)
+
+      text_dirs = colon_text.split(':')
+      line_no = text_dirs.pop()
+      try:
+        line_no = int(line_no)
+      except:
+        line_no = 0
+
+      colon_text = ':'.join(text_dirs)
 
   focused_line = kv.window.original_widget.get_middle_index()
   files, closest_token = iterate_and_match_tokens(ret['tokens'], focused_line, file_matcher)
 
   def func(response):
+    split_resp = response.split(':')
+    line_no = 0
+    if len(split_resp) == 2:
+      response, line_no = split_resp
     try:
       with open(response, "r") as f:
         contents = list(f.readlines())
@@ -504,6 +541,7 @@ def do_get_files(kv, ret, widget):
     except Exception, e:
       debug("EXCEPTION", e)
 
+    kv.window.original_widget.set_focus(int(line_no))
   if not len(files):
     files.append("No Files found in buffer")
   overlay_menu(widget, title="Choose a file to open", items=files, cb=func, focused=closest_token)
@@ -537,6 +575,16 @@ def do_print(kv, ret, scr):
 
 def do_interactive_sed(kv, ret, scr=None):
   pass
+
+def do_back_or_quit(kv, ret, widget):
+  if widget.overlay_opened:
+    debug("CLOSING OVERLAY")
+    widget.close_overlay()
+  elif kv.stack:
+    kv.restore_last_display()
+  else:
+    debug("QUITTING")
+    raise urwid.ExitMainLoop()
 
 def do_close_overlay_or_quit(kv, ret, widget):
   if  widget.overlay_opened:
@@ -648,8 +696,12 @@ CURSES_HOOKS = {
     "fn" : do_pipe_prompt,
     "help" : "Pipe current buffer through an external command"
   },
-  "q" : {
+  "Q" : {
     "fn" : do_close_overlay_or_quit,
+    "help" : "Quit kit / Close current overlay"
+  },
+  "q" : {
+    "fn" : do_back_or_quit,
     "help" : "Quit kit / Close current overlay"
   },
   "p" : {
