@@ -398,20 +398,30 @@ def do_syntax_coloring(kv, ret, widget):
   walker.append(urwid.Text(''))
   readjust_display(kv, widget.original_widget, focused_index)
 
-def overlay_menu(widget, title, items, cb):
+def overlay_menu(widget, title="", items=[], focused=None, cb=None):
   def button(text, value):
     def button_pressed(but):
       debug("BUTTON PRESSED", title, text)
       cb(text)
 
     button = urwid.Button(text[:40], on_press=button_pressed)
+    button.button_text = value
 
     return button
 
   walker = urwid.SimpleListWalker([button(token, token) for token in items])
-  walker.insert(0, urwid.Text(title))
   listbox = urwid.ListBox(walker)
   url_window = urwid.LineBox(listbox)
+
+  for index, token in enumerate(walker):
+    debug("CHECKING FOR FOCUS", token.button_text, focused)
+    if token.button_text == focused:
+      debug("FOCUSED ITEM")
+      # Need to account for the insertion of the title at the start (below), so
+      # we add 1
+      listbox.set_focus(index+1) 
+  walker.insert(0, urwid.Text(title))
+
   widget.open_overlay(url_window)
 
 def is_git_like(obj):
@@ -420,22 +430,44 @@ def is_git_like(obj):
 
   return ret == 0
 
-def do_get_git_objects(kv, ret, widget):
-  import re
-  tokens = ret['tokens']
+def iterate_and_match_tokens(tokens, focused_line_no, func):
   files = []
   visited = {}
+  cur_closest_distance = 10000000000000
+  closest_token = None
+
   for token in tokens:
     text = token['text']
     if not text in visited:
       visited[text] = True
-      if re.search('^\w*\d*\w\d(\d|\w)+$', text):
-        debug("GIT HASH?", text)
-        if is_git_like(text):
-          files.append(text[:10])
+
+      ret = func(text, visited)
+      if ret:
+        closeness = abs(focused_line_no - token['line'])
+        debug("DISTANCE", text, closeness)
+        if closeness < cur_closest_distance:
+          cur_closest_distance = closeness
+          closest_token = ret
+          debug("SETTING CLOSEST TOKEN", closeness, closest_token)
+        files.append(ret)
+
+  return (files, closest_token)
+
+def do_get_git_objects(kv, ret, widget):
+  def git_matcher(filename, visited):
+    debug("GIT MATCHING", filename)
+    if re.search('^\w*\d*\w\d(\d|\w)+$', filename):
+      debug("GIT HASH?", filename)
+      if is_git_like(filename):
+        return filename[:10]
+
+  focused_line = kv.window.original_widget.get_middle_index()
+  files, closest_token = iterate_and_match_tokens(ret['tokens'], focused_line, git_matcher)
 
   if not len(files):
     files.append("No git objects found in document")
+
+  debug("Closest token to line", closest_token)
 
   def func(response):
     contents = subprocess.check_output(['git', 'show', response])
@@ -445,57 +477,45 @@ def do_get_git_objects(kv, ret, widget):
     syntax_colored = False
     kv.read_and_display(lines)
 
-  overlay_menu(widget, "Choose a git object to open", files, func)
+  overlay_menu(widget, title="Choose a git object to open", items=files, cb=func, focused=closest_token)
 
 
 
 def do_get_files(kv, ret, widget):
-  tokens = ret['tokens']
-  files = []
-  visited = {}
-  for token in tokens:
-    text = token['text']
+  def file_matcher(text, visited):
     while text:
       if not text in visited:
         visited[text] = True
         if os.path.isfile(text):
-          files.append(text)
-          break
+          return text
 
       text_dirs = text.split('/')
       text_dirs.pop(0)
       text = '/'.join(text_dirs)
 
-  if not len(files):
-    files.append("No files found in document")
+  focused_line = kv.window.original_widget.get_middle_index()
+  files, closest_token = iterate_and_match_tokens(ret['tokens'], focused_line, file_matcher)
 
   def func(response):
     try:
       with open(response, "r") as f:
         contents = list(f.readlines())
-        debug("READ FILE", contents)
         widget.close_overlay()
-        previous_widget = None
-        syntax_colored = False
         kv.read_and_display(contents)
     except Exception, e:
       debug("EXCEPTION", e)
 
-  overlay_menu(widget, "Choose a file to open", files, func)
+  if not len(files):
+    files.append("No Files found in buffer")
+  overlay_menu(widget, title="Choose a file to open", items=files, cb=func, focused=closest_token)
 
 def do_get_urls(kv, ret, widget=None):
   tokens = ret['tokens']
 
-  urls = []
-  import re
-  for token in tokens:
-    match = re.search("^\W*(https?://[\w\./]*|www.[\w\./\?&\.]*)", token['text'])
+  def url_matcher(text, visited):
+    match = re.search("^\W*(https?://[\w\./]*|www.[\w\./\?&\.]*)", text)
     if match:
-      urls.append(match.group(1))
-
-
-  if not len(urls):
-    urls.append("No URLS found in document")
+      return match.group(1)
 
   def func(response):
     if not response.startswith('http'):
@@ -503,7 +523,11 @@ def do_get_urls(kv, ret, widget=None):
     subprocess.Popen(["/usr/bin/xdg-open", response])
     widget.close_overlay()
 
-  overlay_menu(widget, "Choose a URL to open", urls, func)
+  focused_line = kv.window.original_widget.get_middle_index()
+  urls, closest_token = iterate_and_match_tokens(ret['tokens'], focused_line, url_matcher)
+  if not len(urls):
+    urls.append("No URLs found in buffer")
+  overlay_menu(widget, title="Choose a URL to open", items=urls, cb=func, focused=closest_token)
 
 def do_print(kv, ret, scr):
   def func():
@@ -865,6 +889,7 @@ class Viewer(object):
   def read_and_display(self, lines):
     global previous_widget
     previous_widget = None
+    syntax_colored = False
     self.stack.append(self.ret)
     self.ret = read_lines(lines)
     display_lines(lines, self.window)
