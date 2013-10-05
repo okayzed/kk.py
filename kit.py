@@ -4,8 +4,6 @@
 # {{{ about
 # The kitchen sink is a smarter pager. It lets you operate on any output and quickly take action
 
-# things the kitchen sink could potentially do:
-
 # DONE
 # x locate (and open) files in the output
 # x open urls from the output
@@ -53,9 +51,9 @@ from pygments.lexers import guess_lexer
 
 # {{{ util
 def clear_escape_codes(line):
+  # clear color codes
   newline = re.sub('\033\[\d*;?\d*m', '', line)
-
-  # Jank escape code clearing methodology
+  # jank escape code clearing methodology. need to update as new codes found
   newline = re.sub('\033\[\d*[ABCDEFGHIJK]', '', newline)
   return newline
 
