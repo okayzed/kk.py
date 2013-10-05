@@ -46,6 +46,11 @@ from pygments.lexers import guess_lexer
 # }}}
 
 # {{{ util
+def clear_escape_codes(line):
+  line = re.sub('\033\[\d*m', '', line)
+  debug(line)
+  return line
+
 def add_vim_movement():
   updatedMappings = {
     'k':        'cursor up',
@@ -79,7 +84,7 @@ def tokenize(lines):
     tokens = line.split()
     for token in tokens:
       all_tokens.append({
-        "text" : token,
+        "text" : clear_escape_codes(token),
         "line" : index,
         "col" : col
       })
@@ -100,6 +105,7 @@ def read_lines(in_lines=None):
   for line in in_lines:
     maxx = max(maxx, len(line))
     numlines += 1
+    # strip some stuff out
     line = line.replace('[\x01-\x1F\x7F]', '')
     lines.append(line)
     if not content and line.strip() != "":
@@ -271,7 +277,6 @@ def readjust_display(kv, listbox, focused_index):
   listbox.set_focus(index)
   listbox.set_focus_valign(('fixed top', offset))
 
-
 def do_syntax_coloring(kv, ret, widget):
   global previous_widget, syntax_colored
   walker = urwid.SimpleListWalker([])
@@ -366,7 +371,6 @@ def do_syntax_coloring(kv, ret, widget):
         walker.append(urwid.Text(list(formatted_line)))
 
 
-
   if ret['joined'].find("diff --git") >= 0:
     walker[:] = [ ]
     wlines = []
@@ -374,6 +378,7 @@ def do_syntax_coloring(kv, ret, widget):
     fname = None
 
     for line in ret['lines']:
+      line = clear_escape_codes(line)
       if line.startswith("diff --git"):
 
         add_lines_to_walker(wlines, walker, fname, diff=True)
@@ -808,11 +813,27 @@ def setup_general_hooks():
 palette = [
   ('highlight', 'white', 'dark gray'),
   ('banner', 'black', 'white'),
+  ('default', 'black', 'dark gray'),
   ('diff_add', 'black', 'light green'),
   ('diff_del', 'black', 'light red'),
   ('streak', 'black', 'dark red'),
   ('bg', 'black', 'dark blue'),
 ]
+COLORS = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
+COLOR_NAMES = {
+   "black": "black",
+   "red": "dark red",
+   "green": "dark green",
+   "yellow": "yellow",
+   "blue": "dark blue",
+   "magenta": "dark magenta",
+   "cyan": "dark cyan",
+   "white" : "white"
+
+}
+for color in COLORS:
+  palette.append(('%s_bg' % (color), 'black', COLOR_NAMES[color]))
+  palette.append(('%s_fg' % (color), COLOR_NAMES[color], 'black'))
 
 
 # }}}
@@ -921,17 +942,58 @@ class Viewer(object):
     self.in_command_prompt = False
     self.panes.set_focus('body')
 
-
-  def display_lines(self, lines):
-    widget = self.window
+  def escape_ansi_colors(self, lines):
     wlist = []
+    def build_color_table():
+      table = {"[0":'default'}
+
+      for index, color in enumerate(COLORS):
+        table["[%s" % (30 + index)] = "%s_fg" % color
+      for index, color in enumerate(COLORS):
+        table["[%s" % (40 + index)] = "%s_bg" % color
+
+      return table
+
+
+    table = build_color_table()
     for line in lines:
       col = 0
       stripped = line.lstrip()
       col = len(line) - len(stripped)
+      markup = []
+      stripped = line.rstrip()
+      newline = False
+      if not syntax_colored:
+        if stripped.find("\033") >= 0:
+          split_strip = stripped.split("\033")
+          markup.append(split_strip[0])
+          for at in split_strip[1:]:
+            attr, text = at.split("m",1)
+            if text:
+              if attr in table: 
+                markup.append((table[attr], text))
+              else:
+                markup.append((None, text))
+        else:
+          markup = stripped
 
-      wlist.append(urwid.Text(line.rstrip()))
+        line = markup
+        if not line:
+          newline = True
 
+      else:
+        line = (None, line)
+
+      if line:
+        wlist.append(urwid.Text(line))
+      if newline:
+        wlist.append(urwid.Text(''))
+    return wlist
+
+  def display_lines(self, lines):
+    widget = self.window
+
+    wlist = self.escape_ansi_colors(lines)
     walker = urwid.SimpleListWalker(wlist)
     text = TextBox(walker)
     widget.original_widget = text
