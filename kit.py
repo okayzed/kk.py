@@ -1033,6 +1033,7 @@ class Viewer(object):
   def restore_last_display(self):
     global previous_widget
     previous_widget = None
+    syntax_colored = False
     if self.stack:
       self.ret = self.stack.pop()
       self.display_lines(self.ret['lines'])
