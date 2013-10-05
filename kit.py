@@ -155,6 +155,8 @@ def _get_content(editor, initial=""):
     from tempfile import NamedTemporaryFile
 
     tfName = None
+
+    initial = clear_escape_codes(initial)
     # Create the initial temporary file.
     with NamedTemporaryFile(delete=False) as tf:
         tfName = tf.name
