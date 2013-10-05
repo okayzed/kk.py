@@ -167,9 +167,10 @@ class TextBox(urwid.ListBox):
     self.highlight_middle(size, focus)
     return super(TextBox, self).render(size, focus)
 
-  def highlight_middle(self, size, focus):
-    return
+  def get_middle_index(self):
+    return self.middle_position
 
+  def highlight_middle(self, size, focus):
     vis = self.calculate_visible(size, focus)
     if self.last_focused_lines:
       for line in self.last_focused_lines:
@@ -178,17 +179,6 @@ class TextBox(urwid.ListBox):
     top_trimmed_rows = vis[1][1]
     bot_trimmed_rows = vis[2][1]
 
-
-    def highlight_line(line_no):
-      try:
-        focus_widget = self.body[line_no]
-        if focus_widget:
-          text = focus_widget.get_text()[0]
-          focus_widget.prev_style = focus_widget.get_text()[0]
-          focus_widget.set_text(('highlight', text))
-          self.last_focused_lines.append(focus_widget)
-      except:
-        return
 
     # Figure out what the middle line is, so we can highlight it
     start_index = 0
@@ -210,7 +200,8 @@ class TextBox(urwid.ListBox):
 
     end_index = end_index or size[1]
     middle = abs(end_index - start_index) / 2 + start_index
-    highlight_line(middle)
+
+    self.middle_position = middle
 
 
 
