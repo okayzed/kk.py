@@ -293,9 +293,7 @@ def overlay_menu(widget, title="", items=[], focused=None, cb=None, modal_keys=N
   url_window = urwid.LineBox(listbox)
 
   for index, token in enumerate(walker):
-    debug("CHECKING FOR FOCUS", token.button_text, focused)
     if token.button_text == focused:
-      debug("FOCUSED ITEM")
       # Need to account for the insertion of the title at the start (below), so
       # we add 1
       listbox.set_focus(index+1)
@@ -342,7 +340,6 @@ def is_git_like(obj):
 def do_get_git_objects(kv, ret, widget):
   def git_matcher(filename, visited):
     if re.search('^\w*\d*\w\d(\d|\w)+$', filename):
-      debug("GIT HASH?", filename)
       if is_git_like(filename):
         return filename[:10]
 
@@ -486,14 +483,12 @@ def do_back_or_quit(kv, ret, widget):
   elif kv.stack:
     kv.restore_last_display()
   else:
-    debug("QUITTING")
     raise urwid.ExitMainLoop()
 
 def do_close_overlay_or_quit(kv, ret, widget):
   if  widget.overlay_opened:
     widget.close_overlay()
   else:
-    debug("QUITTING")
     raise urwid.ExitMainLoop()
 
 def do_quit(kv, ret, scr):
@@ -528,15 +523,15 @@ def do_general(kv, ret, widget):
   setup_general_hooks()
 
 def do_pipe_prompt(kv, ret, widget):
-  debug("ENTERING PIPE MODE")
+  debug("Entering pipe mode")
   kv.open_command_line('!')
 
 def do_search_prompt(kv, ret, widget):
-  debug("ENTERING SEARCH MODE")
+  debug("Entering search mode")
   kv.open_command_line('/')
 
 def do_command_prompt(kv, ret, widget):
-  debug("ENTERING COMMAND MODE")
+  debug("Entering command mode")
   kv.open_command_line(':')
 
 def handle_command(prompt, command):
@@ -684,7 +679,6 @@ for hook in GENERAL_HOOKS:
 
     def replacement(*args, **kwargs):
       global _key_hooks
-      debug("CALLING REPLACEMENT FUNCTION", obj)
       obj['oldfn'](*args, **kwargs)
       _key_hooks = CURSES_HOOKS
 
@@ -696,10 +690,7 @@ for hook in GENERAL_HOOKS:
 
 def setup_general_hooks():
   global _key_hooks
-
-  debug("USING GENERAL HOOKS")
   _key_hooks = GENERAL_HOOKS
-
 
 # }}}
 
@@ -1006,8 +997,6 @@ class Viewer(object):
 
     stdout = p.communicate()[0]
     kv.read_and_display(stdout.split("\n"))
-
-
 
   def find_and_focus(self, word=None, reverse=False):
     start_index = 0
