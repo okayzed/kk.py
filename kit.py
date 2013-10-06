@@ -557,7 +557,7 @@ def do_scroll_top(kv, ret, widget):
 
 def do_scroll_bottom(kv, ret, widget):
   widget.original_widget.set_focus_valign("bottom")
-  widget.original_widget.set_focus(len(widget.original_widget.body) + 1)
+  kv.readjust_display(widget.original_widget, len(widget.original_widget.body))
 
 def do_general(kv, ret, widget):
   debug("Entering general mode")
