@@ -1011,6 +1011,7 @@ class Viewer(object):
       new_text, attr = self.last_search_token.get_text()
       self.last_search_token.set_text(('highlight', new_text))
 
+    index = min(len(listbox.body) - 1, index)
     listbox.set_focus(index)
     listbox.set_focus_valign('middle')
     self.update_pager()
