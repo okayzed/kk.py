@@ -1001,9 +1001,7 @@ class Viewer(object):
     widget.original_widget = text
 
   def get_focus_index(self, widget):
-    index = int(widget.get_middle_index() / 2) * 2 + 1
-
-    return index
+    return widget.get_middle_index()
 
   def readjust_display(self, listbox, index):
     if self.last_search_token:
