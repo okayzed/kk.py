@@ -290,12 +290,20 @@ def overlay_menu(widget, title="", items=[], focused=None, cb=None, modal_keys=N
   listbox = urwid.ListBox(walker)
   url_window = urwid.LineBox(listbox)
 
+  focused_index = 0
   for index, token in enumerate(walker):
     if token.button_text == focused:
       # Need to account for the insertion of the title at the start (below), so
       # we add 1
-      listbox.set_focus(index+1)
+
+      focused_index = index + 1
+
   walker.insert(0, urwid.Text(title))
+
+  try:
+    listbox.set_focus(focused_index)
+  except:
+    pass
 
   widget.open_overlay(url_window, modal_keys=modal_keys)
 
