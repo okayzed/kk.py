@@ -21,9 +21,7 @@
 # TODO
 
 # o SESSIONS & CROSS SESSION ACTIVITIES
-# o compare two different outputs (do ad-hoc diffs)
-# o have a mode to dump an old session from kit to stdout
-# o session manager for past contents
+# o compare two different outputs (current buffer and xsel sound good to me)
 # o MATH
 # o sum a column
 # o sum a row
@@ -502,6 +500,30 @@ def do_edit_text(kv, ret, widget):
   lines = get_content_from_editor(ret["joined"])
   kv.read_and_display(lines)
 
+def do_diff_xsel(kv, ret, widget):
+  import difflib
+  lines = [clear_escape_codes(line) for line in kv.ret['lines']]
+  args = [ 'xsel' ]
+  compare = None
+
+  try:
+    p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    compare = p.communicate()[0].strip()
+  except:
+    kv.display_status_msg(('diff_del', "xsel is required for diffing buffers"))
+
+
+  if compare:
+    compare_lines = [line + "\n" for line in compare.split("\n")]
+    comparison = difflib.unified_diff(
+      compare_lines, lines,
+      fromfile="clipboard", tofile="buffer")
+
+    kv.read_and_display(list(comparison))
+
+    kv.display_status_msg("displaying diff of the xsel buffer (before) and current buffer (after)")
+
+
 def do_yank_text(kv, ret, widget):
   lines = [clear_escape_codes(line) for line in kv.ret['lines']]
 
@@ -515,7 +537,6 @@ def do_yank_text(kv, ret, widget):
 
     p.communicate()
     kv.display_status_msg("saved buffer to clipboard")
-    raise Error()
   except:
     kv.display_status_msg(('diff_del', "xsel is required to save the buffer to a clipboard"))
 
@@ -639,6 +660,10 @@ CURSES_HOOKS = {
   "N" : {
     "fn" : do_prev_search,
     "help" : ""
+  },
+  "d" : {
+    "fn" : do_diff_xsel,
+    "help" : "diff the current buffer with the X clipboard"
   },
   "y" : {
     "fn" : do_yank_text,
