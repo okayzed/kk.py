@@ -501,13 +501,15 @@ def do_edit_text(kv, ret, widget):
 
 def do_diff_xsel(kv, ret, widget):
   import difflib
+  debug("DOING DIFF")
   lines = [clear_escape_codes(line) for line in kv.ret['lines']]
   args = [ 'xsel' ]
   compare = None
 
   try:
-    p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p = subprocess.Popen(args, stdout=subprocess.PIPE)
     compare = p.communicate()[0].strip()
+    debug("COMPARE", compare)
   except:
     kv.display_status_msg(('diff_del', "xsel is required for diffing buffers"))
 
@@ -518,9 +520,16 @@ def do_diff_xsel(kv, ret, widget):
       compare_lines, lines,
       fromfile="clipboard", tofile="buffer")
 
-    kv.read_and_display(list(comparison))
+    compared = list(comparison)
+    debug("READ AND DISPLAY", compared)
+    if not len(compared):
+      compared = ["no difference between clipboard and buffer!"]
+    kv.read_and_display(compared)
 
     kv.display_status_msg("displaying diff of the xsel buffer (before) and current buffer (after)")
+  else:
+    debug("NO DIFF")
+    kv.display_status_msg("no diff, to speak of")
 
 
 def do_yank_text(kv, ret, widget):
