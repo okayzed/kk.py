@@ -16,6 +16,7 @@
 # x search prev function
 # x create a stack for jumping between opened buffers
 # x pipe buffer into a command and re-open pager on new output
+# x yank the output into xsel buffer
 
 # TODO
 
@@ -23,7 +24,6 @@
 # o compare two different outputs (do ad-hoc diffs)
 # o have a mode to dump an old session from kit to stdout
 # o session manager for past contents
-#   o yank the output into a 'buffer'
 # o MATH
 # o sum a column
 # o sum a row
@@ -503,7 +503,22 @@ def do_edit_text(kv, ret, widget):
   kv.read_and_display(lines)
 
 def do_yank_text(kv, ret, widget):
-  kv.display_status_msg("yanking buffers is still unimplemented")
+  lines = [clear_escape_codes(line) for line in kv.ret['lines']]
+
+  debug(lines)
+
+  args = [ 'xsel', '-pi' ]
+
+  try:
+    p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    p.stdin.write("".join(lines))
+
+    p.communicate()
+    kv.display_status_msg("saved buffer to clipboard")
+    raise Error()
+  except:
+    kv.display_status_msg(('diff_del', "xsel is required to save the buffer to a clipboard"))
+
 
 def do_next_search(kv, ret, widget):
   kv.find_and_focus()
@@ -627,7 +642,7 @@ CURSES_HOOKS = {
   },
   "y" : {
     "fn" : do_yank_text,
-    "help" : "save the current kit output for later use"
+    "help" : "save the current buffer to the X clipboard with xsel"
   },
   "?" : {
     "fn" : do_open_help,
@@ -700,8 +715,8 @@ palette = [
   ('highlight', 'white', 'dark gray'),
   ('banner', 'black', 'white'),
   ('default', 'black', 'dark gray'),
-  ('diff_add', 'black', 'light green'),
-  ('diff_del', 'black', 'light red'),
+  ('diff_add', 'white', 'light green'),
+  ('diff_del', 'white', 'light red'),
   ('streak', 'black', 'dark red'),
   ('bg', 'black', 'dark blue'),
 ]
