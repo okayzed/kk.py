@@ -739,6 +739,7 @@ class Viewer(object):
     self.prompt_mode = ""
     self.last_search = ""
     self.stack = []
+    self.working = False
     self.last_search_index = 0
     self.last_search_token = None
     self.clear_edit_text = False
@@ -772,6 +773,8 @@ class Viewer(object):
     line_no = min(end_line, line_count)
 
     pager_msg = "%s/%s (%s%%)" % (line_no, line_count, fraction)
+    if self.working:
+      pager_msg = "(working)\n%s" % pager_msg
     self.display_pager_msg(pager_msg)
 
   def run(self, stdscr):
@@ -948,8 +951,6 @@ class Viewer(object):
 
     widget = self.window
 
-    debug("DISPLAYING LINES", lines)
-
     wlist = self.escape_ansi_colors(lines)
     walker = urwid.SimpleListWalker(wlist)
     text = TextBox(walker)
@@ -973,6 +974,7 @@ class Viewer(object):
 
     listbox.set_focus(index)
     listbox.set_focus_valign(('fixed top', offset))
+    self.update_pager()
 
   def read_and_display(self, lines):
     self.stack.append(self.ret)
@@ -1130,7 +1132,7 @@ class Viewer(object):
       return newline
       # end of handle_token function
 
-    def add_diff_lines_to_walker(lines, walker, clear_walker=True):
+    def add_diff_lines_to_walker(lines, walker, clear_walker=True, cb=None):
       if clear_walker:
         walker[:] = [ ]
 
@@ -1180,8 +1182,10 @@ class Viewer(object):
 
           def future_call(loop, user_data):
             lines, walker = user_data
-            self.display_pager_msg('(working)')
-            add_diff_lines_to_walker(lines, walker, clear_walker=False)
+            self.working = True
+            self.update_pager()
+            add_diff_lines_to_walker(lines, walker, clear_walker=False, cb=cb)
+            self.working = False
 
           next_lines = lines[index:]
 
@@ -1191,11 +1195,16 @@ class Viewer(object):
 
       # When we make it to the way end, put the last file contents in
       add_lines_to_walker(wlines, walker, fname, diff=True)
+      self.working = False
+
+      if cb:
+        cb()
+
+      # This is when we are finally done. (For reals)
       self.update_pager()
 
     def add_lines_to_walker(lines, walker, fname=None, diff=False):
       if len(lines):
-        debug("ADDING LINES TO TALKER", lines)
         output = "".join(lines)
         lexer = None
 
@@ -1241,12 +1250,22 @@ class Viewer(object):
 
     lines = self.ret['lines']
     if self.ret['joined'].find("diff --git") >= 0:
-      add_diff_lines_to_walker(lines, walker)
+      def make_cb():
+        started = time.time()
+        def func():
+          ended = time.time()
+          debug("TIME TOOK", ended - started)
+          if ended - started < 1:
+            self.readjust_display(self.window.original_widget, focused_index)
+
+          self.update_pager()
+
+        return func
+      add_diff_lines_to_walker(lines, walker, cb=make_cb())
     else:
       wlines = [clear_escape_codes(line) for line in lines]
       add_lines_to_walker(wlines, walker, None)
 
-    self.readjust_display(self.window.original_widget, focused_index)
     self.syntax_msg()
 
 
