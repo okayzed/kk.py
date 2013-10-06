@@ -1130,9 +1130,70 @@ class Viewer(object):
       return newline
       # end of handle_token function
 
+    def add_diff_lines_to_walker(lines, walker, clear_walker=True):
+      if clear_walker:
+        walker[:] = [ ]
+
+      wlines = []
+      lexer = None
+      fname = None
+
+      iterator = iter(lines)
+      index = 0
+      for line in iterator:
+        index += 1
+        line = clear_escape_codes(line)
+
+        if line.startswith("diff --git"):
+
+          reg_lines = [ line ]
+          def add_line():
+            reg_lines.append(clear_escape_codes(iterator.next()))
+
+          add_line()
+          add_line()
+          add_line()
+
+          index += 3
+
+          # Look upwards for the commit line (find the first line that starts with Author and Date)
+          # and put them in reg_lines
+
+          author_index = 1
+          for windex, wline in enumerate(wlines):
+            if wline.startswith("Author"):
+              author_index = windex
+
+          reg_lines = wlines[author_index-1:] + reg_lines
+          wlines = wlines[:author_index-1]
+
+          if wlines:
+            add_lines_to_walker(wlines, walker, fname, diff=True)
+            add_lines_to_walker(["\n"], walker, fname, diff=False)
+
+          if reg_lines:
+            add_lines_to_walker(reg_lines, walker, "text.txt", diff=False)
+
+          # next output
+          fname = line.split().pop()
+          wlines = [ ]
+
+          def future_call(loop, user_data):
+            lines, walker = user_data
+            add_diff_lines_to_walker(lines, walker, clear_walker=False)
+
+          next_lines = lines[index:]
+
+          return self.loop.set_alarm_in(0.001, future_call, user_data=(next_lines, walker))
+        else:
+          wlines.append(line)
+
+      # When we make it to the way end, put the last file contents in
+      add_lines_to_walker(wlines, walker, fname, diff=True)
 
     def add_lines_to_walker(lines, walker, fname=None, diff=False):
       if len(lines):
+        debug("ADDING LINES TO TALKER", lines)
         output = "".join(lines)
         lexer = None
 
@@ -1176,55 +1237,13 @@ class Viewer(object):
           walker.append(urwid.Text(list(formatted_line)))
 
 
+    lines = self.ret['lines']
     if self.ret['joined'].find("diff --git") >= 0:
-      walker[:] = [ ]
-      wlines = []
-      lexer = None
-      fname = None
-
-      iterator = self.ret['lines'].__iter__()
-      for line in iterator:
-        line = clear_escape_codes(line)
-        if line.startswith("diff --git"):
-
-          reg_lines = [ line ]
-          def add_line():
-            reg_lines.append(clear_escape_codes(iterator.next()))
-
-          add_line()
-          add_line()
-          add_line()
-          add_line()
-
-          # Look upwards for the commit line (find the first line that starts with Author and Date)
-          # and put them in reg_lines
-
-          author_index = 1
-          for index, wline in enumerate(wlines):
-            if wline.startswith("Author"):
-              author_index = index
-
-          reg_lines = wlines[author_index-1:] + reg_lines
-          wlines = wlines[:author_index-1]
-
-          if wlines:
-            add_lines_to_walker(wlines, walker, fname, diff=True)
-            add_lines_to_walker(["\n"], walker, "text.txt", diff=False)
-          add_lines_to_walker(reg_lines, walker, "text.txt", diff=False)
-
-          # next output
-          fname = line.split().pop()
-          wlines = [ ]
-        else:
-          wlines.append(line)
-
-      add_lines_to_walker(wlines, walker, fname, diff=True)
+      add_diff_lines_to_walker(lines, walker)
     else:
-      lines = [clear_escape_codes(line) for line in self.ret['lines'] ]
-      add_lines_to_walker(lines, walker, None)
+      wlines = [clear_escape_codes(line) for line in lines]
+      add_lines_to_walker(wlines, walker, None)
 
-    # an anchor blank element for easily scrolling to bottom of this text view
-    walker.append(urwid.Text(''))
     self.readjust_display(self.window.original_widget, focused_index)
     self.syntax_msg()
 
