@@ -836,19 +836,17 @@ class Viewer(object):
     add_vim_movement()
     widget = OverlayStack(urwid.Text(""))
 
-    self.pager = urwid.Text("")
-    self.prompt = urwid.Edit()
-    prompt_cols = urwid.Columns([
-      ("fixed", 1, urwid.Text(self.prompt_mode)),
-      ("weight", 1, self.prompt),
-      ("fixed", 25, urwid.Padding(self.pager, align=('relative', 90), min_width=25)),
-    ])
-    self.command_line = urwid.WidgetPlaceholder(prompt_cols)
+    self.command_line = urwid.WidgetPlaceholder(urwid.Text(""))
     self.window = widget
 
     self.panes = urwid.Frame(widget, footer=self.command_line)
     self.display_lines(ret["lines"])
 
+    self.pager = urwid.Text("")
+    self.prompt = urwid.Edit()
+
+    self.open_command_line()
+    self.close_command_line()
     self.loop = urwid.MainLoop(self.panes, palette, unhandled_input=unhandle_input, input_filter=handle_input)
 
     self.display_status_msg(('banner', "Welcome to the qitchen sink pager. Press '?' for keybindings"))
@@ -871,7 +869,11 @@ class Viewer(object):
 
   def close_command_line(self, mode=':'):
     self.prompt.set_edit_text("")
-    prompt_cols = urwid.Columns([ ("fixed", 1, urwid.Text(" ")), ("weight", 1, self.prompt)])
+    prompt_cols = urwid.Columns([
+      ("fixed", 1, urwid.Text(self.prompt_mode)),
+      ("weight", 1, self.prompt),
+      ("fixed", 25, urwid.Padding(self.pager, align=('relative', 90), min_width=25)),
+    ])
     self.command_line.original_widget = prompt_cols
     self.in_command_prompt = False
     self.panes.set_focus('body')
