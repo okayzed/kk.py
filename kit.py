@@ -268,27 +268,6 @@ class OverlayStack(urwid.WidgetPlaceholder):
 
 # {{{ character handlers
 
-def get_focus_index(widget, rows):
-  offset, inset = widget.get_focus_offset_inset((1, rows))
-  focus_widget, focus_index = widget.get_focus()
-
-  return focus_index, offset
-
-def readjust_display(kv, listbox, focused_index):
-  index, offset = focused_index
-  if kv.last_search_token:
-    text, attr = kv.last_search_token.get_text()
-    kv.last_search_token.set_text((None, text))
-    kv.last_search_token = listbox.body[kv.last_search_index]
-    new_text, attr = kv.last_search_token.get_text()
-    kv.last_search_token.set_text(('highlight', new_text))
-
-  listbox.set_focus(index)
-  listbox.set_focus_valign(('fixed top', offset))
-
-def do_syntax_coloring(kv, ret, widget):
-  kv.toggle_syntax_coloring()
-
 def overlay_menu(widget, title="", items=[], focused=None, cb=None, modal_keys=None):
   def button(text, value):
     def button_pressed(but):
@@ -314,6 +293,9 @@ def overlay_menu(widget, title="", items=[], focused=None, cb=None, modal_keys=N
   walker.insert(0, urwid.Text(title))
 
   widget.open_overlay(url_window, modal_keys=modal_keys)
+
+def do_syntax_coloring(kv, ret, widget):
+  kv.toggle_syntax_coloring()
 
 def iterate_and_match_tokens(tokens, focused_line_no, func):
   files = []
@@ -567,7 +549,9 @@ def do_command_entered(kv, ret, widget):
     handle_command(kv.prompt_mode, cmd)
 
   kv.close_command_line()
+# }}}
 
+# {{{ help
 def do_open_help(kv, ret, widget):
   listitems = []
 
@@ -934,9 +918,28 @@ class Viewer(object):
     text = TextBox(walker)
     widget.original_widget = text
 
+  def get_focus_index(self, widget):
+    rows = self.ret['maxy']
+    offset, inset = widget.get_focus_offset_inset((1, rows))
+    focus_widget, focus_index = widget.get_focus()
+
+    return focus_index, offset
+
+  def readjust_display(self, listbox, focused_index):
+    index, offset = focused_index
+    if self.last_search_token:
+      text, attr = self.last_search_token.get_text()
+      self.last_search_token.set_text((None, text))
+      self.last_search_token = listbox.body[self.last_search_index]
+      new_text, attr = self.last_search_token.get_text()
+      self.last_search_token.set_text(('highlight', new_text))
+
+    listbox.set_focus(index)
+    listbox.set_focus_valign(('fixed top', offset))
+
   def read_and_display(self, lines):
     self.stack.append(self.ret)
-    self.ret['focused_index'] = get_focus_index(self.window.original_widget, self.ret['maxy'])
+    self.ret['focused_index'] = self.get_focus_index(self.window.original_widget)
 
     self.ret = read_lines(lines)
     self.display_lines(lines)
@@ -947,7 +950,7 @@ class Viewer(object):
 
       self.display_lines(self.ret['lines'])
       if 'focused_index' in self.ret:
-        readjust_display(self, self.window.original_widget, self.ret['focused_index'])
+        self.readjust_display(self.window.original_widget, self.ret['focused_index'])
 
   def pipe_and_display(self, command):
     import shlex
@@ -1029,14 +1032,14 @@ class Viewer(object):
     # a shortcut
     if self.previous_widget:
       original_text = self.window.original_widget
-      focused_index = get_focus_index(original_text, self.ret['maxy'])
+      focused_index = self.get_focus_index(original_text)
       self.window.original_widget = self.previous_widget
       self.previous_widget = original_text
 
       debug("SYNTAX COLORING PREV WIDGET")
 
       self.syntax_colored = not self.syntax_colored
-      readjust_display(self, self.window.original_widget, focused_index)
+      self.readjust_display(self.window.original_widget, focused_index)
       self.syntax_msg()
 
       return
@@ -1053,7 +1056,7 @@ class Viewer(object):
     listbox = TextBox(walker)
     self.window.original_widget = listbox
     self.syntax_colored = True
-    focused_index = get_focus_index(self.previous_widget, self.ret['maxy'])
+    focused_index = self.get_focus_index(self.previous_widget)
 
     formatter = UrwidFormatter()
     def handle_token(token, formatted_line, newline, diff=False):
@@ -1188,7 +1191,7 @@ class Viewer(object):
 
     # an anchor blank element for easily scrolling to bottom of this text view
     walker.append(urwid.Text(''))
-    readjust_display(kv, self.window.original_widget, focused_index)
+    self.readjust_display(self.window.original_widget, focused_index)
     self.syntax_msg()
 
 
