@@ -354,7 +354,7 @@ def do_get_git_objects(kv, ret, widget):
 
   def func(response):
     contents = subprocess.check_output(['git', 'show', response])
-    lines = contents.split("\n")
+    lines = [contents]
     widget.close_overlay()
     kv.read_and_display(lines)
 
