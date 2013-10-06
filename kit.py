@@ -1180,6 +1180,7 @@ class Viewer(object):
 
           def future_call(loop, user_data):
             lines, walker = user_data
+            self.display_pager_msg('(working)')
             add_diff_lines_to_walker(lines, walker, clear_walker=False)
 
           next_lines = lines[index:]
@@ -1190,6 +1191,7 @@ class Viewer(object):
 
       # When we make it to the way end, put the last file contents in
       add_lines_to_walker(wlines, walker, fname, diff=True)
+      self.update_pager()
 
     def add_lines_to_walker(lines, walker, fname=None, diff=False):
       if len(lines):
