@@ -1189,7 +1189,7 @@ class Viewer(object):
 
           next_lines = lines[index:]
 
-          return self.loop.set_alarm_in(0.001, future_call, user_data=(next_lines, walker))
+          return self.loop.set_alarm_in(0.0001, future_call, user_data=(next_lines, walker))
         else:
           wlines.append(line)
 
