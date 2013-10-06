@@ -115,7 +115,7 @@ def read_lines(in_lines=None):
   lines = []
   for line in in_lines:
     maxx = max(maxx, len(line))
-    numlines += 1
+    numlines += line.count("\n")
     # strip some stuff out
     line = line.replace('[\x01-\x1F\x7F]', '')
     lines.append(line)
@@ -188,6 +188,12 @@ class TextBox(urwid.ListBox):
   def get_middle_index(self):
     return self.middle_position
 
+  def get_bottom_index(self):
+    return self.bottom_position
+
+  def get_top_index(self):
+    return self.top_position
+
   def highlight_middle(self, size, focus):
     vis = self.calculate_visible(size, focus)
     if self.last_focused_lines:
@@ -215,6 +221,9 @@ class TextBox(urwid.ListBox):
         start_index = end_index - size[1]
 
     end_index = end_index or size[1]
+    self.top_position = start_index
+    self.bottom_position = end_index
+
     middle = abs(end_index - start_index) / 2 + start_index
 
     self.middle_position = middle
@@ -695,7 +704,7 @@ def setup_general_hooks():
 
 # }}}
 
-# {{{ display input
+# {{{ color setup
 palette = [
   ('highlight', 'white', 'dark gray'),
   ('banner', 'black', 'white'),
@@ -744,6 +753,33 @@ class Viewer(object):
     self.clear_edit_text = False
     self.syntax_colored = False
 
+  def update_pager(self):
+    try:
+      # This can throw if we aren't in text editing mode
+      middle_line = self.window.original_widget.get_middle_index()
+      start_line = self.window.original_widget.get_top_index() + 1
+      end_line = self.window.original_widget.get_bottom_index() + 1
+    except:
+      return
+
+    line_count = self.ret['maxy']
+    fraction = min(float(middle_line) / float(line_count) * 100, 100)
+
+    line_no = middle_line
+    if fraction < 20:
+      fraction = min(float(start_line) / float(line_count) * 100, 100)
+      line_no = start_line
+
+    if fraction > 20:
+      fraction = min(float(end_line) / float(line_count) * 100, 100)
+      line_no = end_line
+    fraction = int(fraction)
+
+    line_no = min(end_line, line_count)
+
+    pager_msg = "%s/%s (%s%%)" % (line_no, line_count, fraction)
+    self.display_pager_msg(pager_msg)
+
   def run(self, stdscr):
     ret = read_lines(None)
     self.ret = ret
@@ -773,10 +809,10 @@ class Viewer(object):
         if not unhandle_input(key):
           unhandled.append(key)
 
+      self.loop.event_loop.alarm(0.05, self.update_pager)
       if was_general:
         _key_hooks = CURSES_HOOKS
         return []
-
 
       return unhandled
 
@@ -800,8 +836,13 @@ class Viewer(object):
     add_vim_movement()
     widget = OverlayStack(urwid.Text(""))
 
+    self.pager = urwid.Text("")
     self.prompt = urwid.Edit()
-    prompt_cols = urwid.Columns([ ("fixed", 1, urwid.Text(self.prompt_mode)), ("weight", 1, self.prompt)])
+    prompt_cols = urwid.Columns([
+      ("fixed", 1, urwid.Text(self.prompt_mode)),
+      ("weight", 1, self.prompt),
+      ("fixed", 25, urwid.Padding(self.pager, align=('relative', 90), min_width=25)),
+    ])
     self.command_line = urwid.WidgetPlaceholder(prompt_cols)
     self.window = widget
 
@@ -1201,6 +1242,11 @@ class Viewer(object):
     self.prompt.set_caption(msg)
     self.prompt.set_edit_text("")
     self.clear_edit_text = True
+
+  def display_pager_msg(self, msg):
+    if type(msg) is str:
+      msg = ('highlight', msg)
+    self.pager.set_text(msg)
 
 if __name__ == "__main__":
   kv = Viewer()
