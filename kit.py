@@ -17,11 +17,10 @@
 # x create a stack for jumping between opened buffers
 # x pipe buffer into a command and re-open pager on new output
 # x yank the output into xsel buffer
+# o compare two different outputs (current buffer and xsel sound good to me)
 
 # TODO
 
-# o SESSIONS & CROSS SESSION ACTIVITIES
-# o compare two different outputs (current buffer and xsel sound good to me)
 # o MATH
 # o sum a column
 # o sum a row
