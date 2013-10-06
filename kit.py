@@ -828,7 +828,10 @@ class Viewer(object):
 
     self.display_status_msg(('banner', "Welcome to the qitchen sink pager. Press '?' for keybindings"))
     if ret['has_content']:
-      self.loop.run()
+      try:
+        self.loop.run()
+      except KeyboardInterrupt:
+        pass
 
   def repaint_screen(self):
     self.loop.draw_screen()
@@ -1111,7 +1114,7 @@ class Viewer(object):
         else:
           kv.syntax_lang = lexer.name
           debug("LEXER (GUESSED) SCORE", lexer, score)
-          if score < 0.3:
+          if score <= 0.1:
             # COULDNT FIGURE OUT A GOOD SYNTAX HIGHLIGHTER
             # DISABLE IT
             lexer = pygments.lexers.get_lexer_by_name('text')
