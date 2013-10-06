@@ -842,7 +842,7 @@ class Viewer(object):
     self.close_command_line()
     self.loop = urwid.MainLoop(self.panes, palette, unhandled_input=unhandle_input, input_filter=handle_input)
 
-    self.display_status_msg(('banner', "Welcome to the qitchen sink pager. Press '?' for keybindings"))
+    self.display_status_msg(('banner', "Welcome to the kitchen sink pager. Press '?' for shortcuts"))
     if ret['has_content']:
       try:
         self.loop.run()
