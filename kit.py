@@ -153,10 +153,11 @@ def read_lines(in_lines=None):
 
 # {{{ external editor
 # http://stackoverflow.com/questions/2576956/getting-data-from-external-program
-def _get_content(editor, initial=""):
+def get_content_from_editor(initial=""):
     from subprocess import call
     from tempfile import NamedTemporaryFile
 
+    editor = os.environ.get('EDITOR', 'vim')
     tfName = None
 
     initial = clear_escape_codes(initial)
@@ -498,7 +499,7 @@ def do_pop_stack(kv, ret, scr):
   kv.restore_last_display()
 
 def do_edit_text(kv, ret, widget):
-  lines = _get_content(os.environ["EDITOR"], ret["joined"])
+  lines = get_content_from_editor(ret["joined"])
   kv.read_and_display(lines)
 
 def do_yank_text(kv, ret, widget):
