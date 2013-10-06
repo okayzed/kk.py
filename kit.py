@@ -115,7 +115,10 @@ def read_lines(in_lines=None):
   lines = []
   for line in in_lines:
     maxx = max(maxx, len(line))
-    numlines += line.count("\n")
+    if line.count("\n"):
+      numlines += line.count("\n")
+    else:
+      numlines += 1
     # strip some stuff out
     line = line.replace('[\x01-\x1F\x7F]', '')
     lines.append(line)
@@ -196,9 +199,6 @@ class TextBox(urwid.ListBox):
 
   def highlight_middle(self, size, focus):
     vis = self.calculate_visible(size, focus)
-    if self.last_focused_lines:
-      for line in self.last_focused_lines:
-        line.set_text((prev_style, line.get_text()[0]))
 
     top_trimmed_rows = vis[1][1]
     bot_trimmed_rows = vis[2][1]
@@ -354,7 +354,7 @@ def do_get_git_objects(kv, ret, widget):
 
   def func(response):
     contents = subprocess.check_output(['git', 'show', response])
-    lines = [contents]
+    lines = contents.split("\n")
     widget.close_overlay()
     kv.read_and_display(lines)
 
@@ -482,7 +482,6 @@ def do_print(kv, ret, scr):
 
 def do_back_or_quit(kv, ret, widget):
   if widget.overlay_opened:
-    debug("CLOSING OVERLAY")
     widget.close_overlay()
   elif kv.stack:
     kv.restore_last_display()
@@ -492,7 +491,6 @@ def do_back_or_quit(kv, ret, widget):
 
 def do_close_overlay_or_quit(kv, ret, widget):
   if  widget.overlay_opened:
-    debug("CLOSING OVERLAY")
     widget.close_overlay()
   else:
     debug("QUITTING")
@@ -532,6 +530,7 @@ def do_general(kv, ret, widget):
 def do_pipe_prompt(kv, ret, widget):
   debug("ENTERING PIPE MODE")
   kv.open_command_line('!')
+
 def do_search_prompt(kv, ret, widget):
   debug("ENTERING SEARCH MODE")
   kv.open_command_line('/')
@@ -754,12 +753,15 @@ class Viewer(object):
     self.syntax_colored = False
 
   def update_pager(self):
+    debug("UPDATING PAGER")
+
     try:
       # This can throw if we aren't in text editing mode
       middle_line = self.window.original_widget.get_middle_index()
       start_line = self.window.original_widget.get_top_index() + 1
       end_line = self.window.original_widget.get_bottom_index() + 1
-    except:
+    except Exception, e:
+      debug("UPDATE PAGER EXCEPTION", e)
       return
 
     line_count = self.ret['maxy']
@@ -767,7 +769,7 @@ class Viewer(object):
 
     line_no = middle_line
     if fraction < 20:
-      fraction = min(float(start_line) / float(line_count) * 100, 100)
+      fraction = max(float(start_line) / float(line_count) * 100, 0)
       line_no = start_line
 
     if fraction > 20:
@@ -1003,8 +1005,7 @@ class Viewer(object):
     p.stdin.write(data_in)
 
     stdout = p.communicate()[0]
-
-    kv.read_and_display([stdout])
+    kv.read_and_display(stdout.split("\n"))
 
 
 
