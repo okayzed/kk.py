@@ -795,7 +795,7 @@ class Viewer(object):
     try:
       # This can throw if we aren't in text editing mode
       middle_line = self.window.original_widget.get_middle_index()
-      start_line = self.window.original_widget.get_top_index() + 1
+      start_line = self.window.original_widget.get_top_index()
       end_line = self.window.original_widget.get_bottom_index() + 1
     except Exception, e:
       debug("UPDATE PAGER EXCEPTION", e)
@@ -1001,14 +1001,11 @@ class Viewer(object):
     widget.original_widget = text
 
   def get_focus_index(self, widget):
-    rows = self.ret['maxy']
-    offset, inset = widget.get_focus_offset_inset((1, rows))
-    focus_widget, focus_index = widget.get_focus()
+    index = int(widget.get_middle_index() / 2) * 2 + 1
 
-    return focus_index, offset
+    return index
 
-  def readjust_display(self, listbox, focused_index):
-    index, offset = focused_index
+  def readjust_display(self, listbox, index):
     if self.last_search_token:
       text, attr = self.last_search_token.get_text()
       self.last_search_token.set_text((None, text))
@@ -1017,7 +1014,7 @@ class Viewer(object):
       self.last_search_token.set_text(('highlight', new_text))
 
     listbox.set_focus(index)
-    listbox.set_focus_valign(('fixed top', offset))
+    listbox.set_focus_valign('middle')
     self.update_pager()
 
   def read_and_display(self, lines):
@@ -1295,12 +1292,13 @@ class Viewer(object):
     lines = self.ret['lines']
     if self.ret['joined'].find("diff --git") >= 0:
       def make_cb():
+        original_widget = self.window.original_widget
         started = time.time()
         def func():
           ended = time.time()
           debug("TIME TOOK", ended - started)
           if ended - started < 1:
-            self.readjust_display(self.window.original_widget, focused_index)
+            self.readjust_display(original_widget, focused_index)
 
           self.update_pager()
 
@@ -1309,6 +1307,7 @@ class Viewer(object):
     else:
       wlines = [clear_escape_codes(line) for line in lines]
       add_lines_to_walker(wlines, walker, None)
+      self.readjust_display(self.window.original_widget, focused_index)
 
     self.syntax_msg()
 
