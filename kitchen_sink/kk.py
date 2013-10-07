@@ -78,10 +78,10 @@ def add_vim_movement():
   for key in updatedMappings:
     urwid.command_map[key] = updatedMappings[key]
 
-
-debugfile = open(__name__ + ".debug", "w")
+#debugfile = open(__name__ + ".debug", "w")
 def debug(*args):
-  print >> debugfile, " ".join([str(i) for i in args])
+#  print >> debugfile, " ".join([str(i) for i in args])
+  pass
 
 # }}}
 

@@ -2,10 +2,6 @@
 
 """Provides a pygments formatter for use with urwid."""
 
-debugfile = open(__name__ + ".debug", "w")
-def debug(msg):
-  print >> debugfile, msg
-
 from pygments.formatter import Formatter
 import urwid
 
@@ -105,9 +101,6 @@ class UrwidFormatter(Formatter):
             self.style_attrs[str(ttype)] = self.findclosestattr(
                 fgcolstr, bgcolstr, othersettings, colors)
 
-        debug(self.style)
-        debug(self.style_attrs)
-        
     def formatgenerator(self, tokensource):
         """Takes a token source, and generates 
         (tokenstring, urwid.AttrSpec) pairs"""
@@ -116,7 +109,6 @@ class UrwidFormatter(Formatter):
               ttype = "Token.Other"
 
             while str(ttype) not in self.style_attrs:
-                debug(str(ttype) + " not found")
                 debug(ttype)
                 tokens = str(ttype).split('.')
                 tokens.pop()
