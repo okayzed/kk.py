@@ -18,6 +18,9 @@ Examples
     # just use it for paging. sometimes, it can even figure out
     # the filetype and add syntax highlighting. (press 's')
     cat some_file.py | kk
+    # it does git diff highlighting, too (press 's' to toggle highlighting)
+    git log --color -n1 -p | kk
+
 
 
 Why another pager?
