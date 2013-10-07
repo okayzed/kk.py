@@ -15,13 +15,13 @@ elif test -n "$FCEDIT"; then
   FILE=".kshrc"
 else
   echo "Add an alias for 'kk' to your shell .rc file, like so"
-  echo "alias 'kk'='python $PATH_TO_KIT/kit.py'"
+  echo "alias 'kk'='python $PATH_TO_KIT/kk.py'"
   SUCCESS=0
 fi
 
 if [[ ${SUCCESS} = 1 ]]; then
-  sed -i '/^\s*alias.*python.*kit\.py.*$/d' ${HOME}/${FILE}
-  echo "alias 'kk'='python $PATH_TO_KIT/kit.py'" >> ${HOME}/${FILE}
+  sed -i '/^\s*alias.*python.*kk\.py.*$/d' ${HOME}/${FILE}
+  echo "alias 'kk'='python $PATH_TO_KIT/kk.py'" >> ${HOME}/${FILE}
 
   echo "Installed the kitchen sink pager as an alias in ${HOME}/${FILE} to 
 ${PATH_TO_KIT}."
