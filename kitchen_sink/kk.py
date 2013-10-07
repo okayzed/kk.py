@@ -79,10 +79,17 @@ def add_vim_movement():
     urwid.command_map[key] = updatedMappings[key]
 
 
-#debugfile = open(__name__ + ".debug", "w")
+DEBUG=False
+if DEBUG:
+  debugfile = open(__name__ + ".debug", "w")
+  debugfile.close()
+
 def debug(*args):
-  return
-  print >> debugfile, " ".join([str(i) for i in args])
+
+  if DEBUG:
+    debugfile = open(__name__ + ".debug", "a")
+    print >> debugfile, " ".join([str(i) for i in args])
+    debugfile.close()
 
 # }}}
 
@@ -1204,39 +1211,46 @@ class Viewer(object):
         line = clear_escape_codes(line)
 
         if line.startswith("diff --git"):
+          diff_index = index
 
-          reg_lines = [ line ]
+          commit_lines = [ line ]
           def add_line():
-            reg_lines.append(clear_escape_codes(iterator.next()))
+            commit_lines.append(clear_escape_codes(iterator.next()))
 
-          add_line()
-          add_line()
-          add_line()
+          add_line() # Author
+          add_line() # Date
+          add_line() # Blah
+
 
           index += 3
 
           # Look upwards for the commit line (find the first line that starts with Author and Date)
-          # and put them in reg_lines
+          # and put them in commit_lines
 
-          author_index = 1
+          author_index = None
+
           for windex, wline in enumerate(wlines):
             if wline.startswith("Author:"):
               author_index = windex
 
-          reg_lines = wlines[author_index-1:] + reg_lines
-          wlines = wlines[:author_index-1]
+          if author_index:
+            commit_lines = wlines[author_index-1:] + commit_lines
+            wlines = wlines[:author_index-1]
+          else:
+            commit_lines = []
 
           if wlines:
+            debug("ADDING SYNTAX LINES", wlines, self.fname)
             add_lines_to_walker(wlines, walker, self.fname, diff=True)
             add_lines_to_walker(["\n"], walker, self.fname, diff=True)
 
-          if reg_lines:
-            add_lines_to_walker(reg_lines, walker, self.fname, skip_colors=True, diff=True)
+          if commit_lines:
+            debug("ADDING COMMIT LINES", commit_lines, self.fname)
+            add_lines_to_walker(commit_lines, walker, None, skip_colors=True, diff=True)
 
           # next fname output
           self.fname = line.split().pop()
           debug("SETTING FNAME TO", self.fname)
-          wlines = [ ]
 
           def future_call(loop, user_data):
             lines, walker = user_data
@@ -1307,6 +1321,12 @@ class Viewer(object):
               lines = self.escape_ansi_colors([line.rstrip() for line in lines])
               walker.extend(lines)
               return
+
+        if lexer.__class__ is pygments.lexers.TextLexer:
+          debug("TEXT LEXER! DISABLING")
+          lines = self.escape_ansi_colors(["%s\n" % line.rstrip() for line in lines])
+          walker.extend(lines)
+          return
 
         tokens = lexer.get_tokens(output)
 
