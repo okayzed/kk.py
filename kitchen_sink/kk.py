@@ -1063,7 +1063,7 @@ class Viewer(object):
     p.stdin.write(data_in)
 
     stdout = p.communicate()[0]
-    kv.read_and_display(stdout.split("\n"))
+    self.read_and_display(stdout.split("\n"))
 
   def find_and_focus(self, word=None, reverse=False):
     start_index = 0
