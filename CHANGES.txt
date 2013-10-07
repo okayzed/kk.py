@@ -1,6 +1,5 @@
+v0.0.4, 10/06/2013 -- Updated docs
 v0.0.3, 10/06/2013 -- Remove debugging files.
-
-v0.0.2, 10/06/2013 -- For real.
-
+v0.0.2, 10/06/2013 -- (don't submit buggy app)
 v0.0.1, 10/06/2013 -- Initial release.
 
