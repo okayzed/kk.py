@@ -10,7 +10,7 @@ setup(
     url='http://github.com/okayzed/kk',
     license='LICENSE.txt',
     description='a smarter pager.',
-    long_description=open('README.md').read(),
+    long_description=open('README.rst').read(),
     install_requires=[
     "urwid >= 1.0",
     "pygments",
