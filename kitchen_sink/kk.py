@@ -79,7 +79,7 @@ def add_vim_movement():
     urwid.command_map[key] = updatedMappings[key]
 
 
-DEBUG=False
+DEBUG=True
 if DEBUG:
   debugfile = open(__name__ + ".debug", "w")
   debugfile.close()
@@ -855,7 +855,7 @@ class Viewer(object):
     def handle_input(keys, raw):
       global _key_hooks
       unhandled = []
-      debug("HANDLING INPUT", keys)
+      debug("HANDLING INPUT", repr(keys))
 
       was_general = False
       # always switch back
@@ -882,7 +882,7 @@ class Viewer(object):
     def unhandle_input(key):
       if self.in_command_prompt:
         if key == 'enter':
-          do_command_entered(kv, self.ret, widget)
+          do_command_entered(self, self.ret, widget)
           return True
 
         if key == 'esc':
@@ -1157,30 +1157,21 @@ class Viewer(object):
     focused_index = self.get_focus_index(self.previous_widget)
 
     formatter = UrwidFormatter()
-    def handle_token(token, formatted_line, newline, diff=False):
+    def handle_token(token, formatted_line, diff=False):
+      debug("HANDLING TOKEN", token[1])
       text = token[1]
       if not text:
-        return newline
-
-      if newline and diff and False:
-        if text[0] == '+':
-          formatted_line.append(('diff_add', '+'))
-          text = token[1][1:]
-          token = (token[0], text)
-        elif text[0] == '-':
-          formatted_line.append(('diff_del', '-'))
-          text = token[1][1:]
-          token = (token[0], text)
+        return
 
       if text.find('\n') >= 0:
         split_line = clear_escape_codes(text)
         while split_line:
           n = split_line.find('\n')
           if n >= 0:
-            newline = True
+            debug("CHOMPING NEWLINE", repr(split_line))
             last_word = split_line[:n]
             split_line = split_line[n+1:]
-            formatted_line.append('')
+            formatted_line.append(last_word)
             walker.append(urwid.Text(list(formatted_line)))
             del formatted_line[:]
           else:
@@ -1189,9 +1180,7 @@ class Viewer(object):
       else:
         token = (token[0], clear_escape_codes(token[1]))
         formatted_line.append(token)
-        newline = False
 
-      return newline
       # end of handle_token function
 
     def add_diff_lines_to_walker(lines, walker, clear_walker=True, cb=None, fname=None):
@@ -1236,16 +1225,17 @@ class Viewer(object):
           if author_index:
             commit_lines = wlines[author_index-1:] + commit_lines
             wlines = wlines[:author_index-1]
-          else:
-            commit_lines = []
 
           if wlines:
             debug("ADDING SYNTAX LINES", wlines, self.fname)
             add_lines_to_walker(wlines, walker, self.fname, diff=True)
-            add_lines_to_walker(["\n"], walker, self.fname, diff=True)
+            if not clear_walker: # incidentally
+              add_lines_to_walker(["\n"], walker, None, skip_colors=True, diff=True)
+
 
           if commit_lines:
             debug("ADDING COMMIT LINES", commit_lines, self.fname)
+
             add_lines_to_walker(commit_lines, walker, None, skip_colors=True, diff=True)
 
           # next fname output
@@ -1308,19 +1298,14 @@ class Viewer(object):
           self.syntax_lang = lexer.name
           debug("LEXER (TRIED: %s) and (GUESSED) SCORE" % (fname), lexer, score)
           if score < 0.3:
-            lexer = guess_lexer(output)
-            score = lexer.__class__.analyse_text(output)
-            debug("LEXER REGUESSED SCORE", lexer, score)
+            # COULDNT FIGURE OUT A GOOD SYNTAX HIGHLIGHTER
+            # DISABLE IT
+            lexer = pygments.lexers.get_lexer_by_name('text')
+            self.syntax_lang = "none. (Couldn't auto-detect a syntax)"
 
-            if score < 0.3:
-              # COULDNT FIGURE OUT A GOOD SYNTAX HIGHLIGHTER
-              # DISABLE IT
-              lexer = pygments.lexers.get_lexer_by_name('text')
-              self.syntax_lang = "none. (Couldn't auto-detect a syntax)"
-
-              lines = self.escape_ansi_colors([line.rstrip() for line in lines])
-              walker.extend(lines)
-              return
+            lines = self.escape_ansi_colors([line.rstrip() for line in lines])
+            walker.extend(lines)
+            return
 
         if lexer.__class__ is pygments.lexers.TextLexer:
           debug("TEXT LEXER! DISABLING")
@@ -1334,10 +1319,9 @@ class Viewer(object):
         # one line at a time
         formatted_tokens = list(formatter.formatgenerator(tokens))
         formatted_line = []
-        newline = False
 
         for token in formatted_tokens:
-          newline = handle_token(token, formatted_line, newline, diff)
+          handle_token(token, formatted_line, diff)
 
         if formatted_line:
           walker.append(urwid.Text(list(formatted_line)))
