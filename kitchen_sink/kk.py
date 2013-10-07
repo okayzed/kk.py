@@ -1029,7 +1029,9 @@ class Viewer(object):
     if self.last_search_token:
       text, attr = self.last_search_token.get_text()
       self.last_search_token.set_text((None, text))
-      self.last_search_token = listbox.body[self.last_search_index]
+
+
+      self.last_search_token = listbox.body[min(self.last_search_index, len(listbox.body))]
       new_text, attr = self.last_search_token.get_text()
       self.last_search_token.set_text(('highlight', new_text))
 
