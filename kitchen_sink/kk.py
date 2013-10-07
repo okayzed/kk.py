@@ -466,7 +466,7 @@ def do_get_files(kv, ret, widget):
       "help" : "",
     }
   }
-  overlay_menu(widget, title="Choose a file to open", items=files,
+  overlay_menu(widget, title="Choose a file to open. ('e' to open in editor)", items=files,
     cb=func, focused=closest_token, modal_keys=modal_keys)
 
 def do_get_urls(kv, ret, widget=None):
@@ -795,6 +795,8 @@ for color in COLORS:
 # {{{ main viewer class
 
 
+_lexer_fname_cache = {}
+ESCAPE_CODE = re.compile("[KABCDEF]")
 _key_hooks = CURSES_HOOKS
 class Viewer(object):
 
@@ -981,7 +983,7 @@ class Viewer(object):
             else:
               # If not a color but an escape code, just swallow it
               text = at
-              split_index = re.search("[KABCDEF]", text).start()
+              split_index = ESCAPE_CODE.search(text).start()
               if split_index >= 0:
                 split_at = [at[:split_index+1], at[split_index+1:]]
 
@@ -1036,7 +1038,8 @@ class Viewer(object):
       new_text, attr = self.last_search_token.get_text()
       self.last_search_token.set_text(('highlight', new_text))
 
-    new_index = max(min(self.ret['maxy'] - 1, index), 0)
+    max_cols = min(len(listbox.body), self.ret['maxy']) - 1
+    new_index = max(min(max_cols, index), 0)
     debug("ADJUSTING DISPLAY", listbox, len(listbox.body), index, new_index, self.syntax_colored)
     listbox.set_focus(new_index)
     listbox.set_focus_valign('middle')
@@ -1281,23 +1284,24 @@ class Viewer(object):
           walker.extend(lines)
           return
 
-        debug("LINES BEFORE LEXER", lines)
-
         output = "".join(lines)
         try:
           forced = True
-          lexer = pygments.lexers.guess_lexer_for_filename(fname, output)
+          if not fname in _lexer_fname_cache:
+            _lexer_fname_cache[fname] = pygments.lexers.get_lexer_for_filename(fname)
+
+          lexer = _lexer_fname_cache[fname]
         except:
           pass
 
         if not lexer:
           lexer = guess_lexer(output)
 
-        score = lexer.__class__.analyse_text(output)
         if diff and forced:
           self.syntax_lang = "git diff"
-          debug("LEXER (FORCED) SCORE", lexer, score)
+          debug("LEXER (FORCED) ", lexer)
         else:
+          score = lexer.__class__.analyse_text(output)
           self.syntax_lang = lexer.name
           debug("LEXER (TRIED: %s) and (GUESSED) SCORE" % (fname), lexer, score)
           if score < 0.3:
