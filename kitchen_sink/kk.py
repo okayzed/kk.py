@@ -78,10 +78,10 @@ def add_vim_movement():
   for key in updatedMappings:
     urwid.command_map[key] = updatedMappings[key]
 
-#debugfile = open(__name__ + ".debug", "w")
+
+debugfile = open(__name__ + ".debug", "w")
 def debug(*args):
-#  print >> debugfile, " ".join([str(i) for i in args])
-  pass
+  print >> debugfile, " ".join([str(i) for i in args])
 
 # }}}
 
@@ -1271,16 +1271,16 @@ class Viewer(object):
 
         score = lexer.__class__.analyse_text(output)
         if diff:
-          kv.syntax_lang = "git diff"
+          self.syntax_lang = "git diff"
           debug("LEXER (FORCED) SCORE", lexer, score)
         else:
-          kv.syntax_lang = lexer.name
+          self.syntax_lang = lexer.name
           debug("LEXER (GUESSED) SCORE", lexer, score)
           if score <= 0.1:
             # COULDNT FIGURE OUT A GOOD SYNTAX HIGHLIGHTER
             # DISABLE IT
             lexer = pygments.lexers.get_lexer_by_name('text')
-            kv.syntax_lang = "none. (Couldn't auto-detect a syntax)"
+            self.syntax_lang = "none. (Couldn't auto-detect a syntax)"
 
             lines = self.escape_ansi_colors([line.rstrip() for line in lines])
             walker.extend(lines)
