@@ -1324,7 +1324,7 @@ class Viewer(object):
 
         if lexer.__class__ is pygments.lexers.TextLexer:
           debug("TEXT LEXER! DISABLING")
-          lines = self.escape_ansi_colors(["%s\n" % line.rstrip() for line in lines])
+          lines = self.escape_ansi_colors(["%s" % line.rstrip() for line in lines])
           walker.extend(lines)
           return
 
