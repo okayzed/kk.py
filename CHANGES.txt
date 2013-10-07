@@ -1,3 +1,4 @@
+v0.0.9, 10/07/2013 -- less crashes.
 v0.0.6, 10/07/2013 -- yet a better dff highlight
 v0.0.5, 10/07/2013 -- better diff highlight
 v0.0.4, 10/06/2013 -- Updated docs
