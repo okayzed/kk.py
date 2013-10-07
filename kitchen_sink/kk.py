@@ -1017,6 +1017,7 @@ class Viewer(object):
 
     widget = self.window
 
+    lines = "".join(lines).split("\n")
     wlist = self.escape_ansi_colors(lines)
     walker = urwid.SimpleListWalker(wlist)
     text = TextBox(walker)
@@ -1035,8 +1036,9 @@ class Viewer(object):
       new_text, attr = self.last_search_token.get_text()
       self.last_search_token.set_text(('highlight', new_text))
 
-    index = max(min(len(listbox.body) - 1, index), 0)
-    listbox.set_focus(index)
+    new_index = max(min(self.ret['maxy'] - 1, index), 0)
+    debug("ADJUSTING DISPLAY", listbox, len(listbox.body), index, new_index, self.syntax_colored)
+    listbox.set_focus(new_index)
     listbox.set_focus_valign('middle')
     self.update_pager()
 
@@ -1139,6 +1141,7 @@ class Viewer(object):
       debug("SYNTAX COLORING PREV WIDGET")
 
       self.syntax_colored = not self.syntax_colored
+      debug("FOCUSED INDEX", focused_index)
       self.readjust_display(self.window.original_widget, focused_index)
       self.syntax_msg()
 
