@@ -921,7 +921,7 @@ class Viewer(object):
     prompt_cols = urwid.Columns([
       ("fixed", 1, urwid.Text(self.prompt_mode)),
       ("weight", 1, self.prompt),
-      ("fixed", 25, urwid.Padding(self.pager, align=('relative', 90), min_width=25)),
+      ("fixed", 25, urwid.Padding(self.pager, align='right', min_width=10)),
     ])
     self.command_line.original_widget = prompt_cols
     self.in_command_prompt = False
@@ -1019,7 +1019,7 @@ class Viewer(object):
       new_text, attr = self.last_search_token.get_text()
       self.last_search_token.set_text(('highlight', new_text))
 
-    index = min(len(listbox.body) - 1, index)
+    index = max(min(len(listbox.body) - 1, index), 0)
     listbox.set_focus(index)
     listbox.set_focus_valign('middle')
     self.update_pager()
