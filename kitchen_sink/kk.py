@@ -79,7 +79,7 @@ def add_vim_movement():
     urwid.command_map[key] = updatedMappings[key]
 
 
-DEBUG=True
+DEBUG=False
 if DEBUG:
   debugfile = open(__name__ + ".debug", "w")
   debugfile.close()
@@ -596,7 +596,7 @@ def do_command_prompt(kv, ret, widget):
   debug("Entering command mode")
   kv.open_command_line(':')
 
-def handle_command(prompt, command):
+def handle_command(kv, prompt, command):
   debug("Handling command", prompt, command)
   if prompt == '/':
     kv.find_and_focus(command)
@@ -611,7 +611,7 @@ def do_command_entered(kv, ret, widget):
   if kv.in_command_prompt:
     cmd, opts = kv.prompt.get_text()
     kv.prompt.set_edit_text('')
-    handle_command(kv.prompt_mode, cmd)
+    handle_command(kv, kv.prompt_mode, cmd)
 
   kv.close_command_line()
 # }}}
@@ -1114,11 +1114,11 @@ class Viewer(object):
 
     found = find_word(tokens, start_index + 1)
     if not found:
-      kv.display_status_msg("Pattern not found. Wrapping")
+      self.display_status_msg("Pattern not found. Wrapping")
       found = find_word(tokens, 0)
 
       if not found:
-        kv.display_status_msg("Pattern not found  (Press RETURN)")
+        self.display_status_msg("Pattern not found  (Press RETURN)")
 
   def syntax_msg(self):
     if self.syntax_colored:
@@ -1158,7 +1158,6 @@ class Viewer(object):
 
     formatter = UrwidFormatter()
     def handle_token(token, formatted_line, diff=False):
-      debug("HANDLING TOKEN", token[1])
       text = token[1]
       if not text:
         return
@@ -1229,13 +1228,12 @@ class Viewer(object):
           if wlines:
             debug("ADDING SYNTAX LINES", wlines, self.fname)
             add_lines_to_walker(wlines, walker, self.fname, diff=True)
-            if not clear_walker: # incidentally
-              add_lines_to_walker(["\n"], walker, None, skip_colors=True, diff=True)
-
 
           if commit_lines:
             debug("ADDING COMMIT LINES", commit_lines, self.fname)
 
+            if not clear_walker and author_index:
+              walker.append(urwid.Text(""))
             add_lines_to_walker(commit_lines, walker, None, skip_colors=True, diff=True)
 
           # next fname output
