@@ -27,6 +27,11 @@
 # o generate a histogram
 # o calculate the big stats (avg, mean, etc)
 
+# COLORS / WEB DEV
+# o highlight hex colors
+# o print a hex color in multiple formats?
+# o grab all hex colors
+
 # }}}
 
 # {{{ imports
