@@ -1336,7 +1336,7 @@ class Viewer(object):
       msg = ('highlight', msg)
     self.pager.set_text(msg)
 
-if __name__ == "__main__":
+def run():
   kv = Viewer()
   curses.wrapper(kv.run)
   for after in kv.after_urwid:
@@ -1345,6 +1345,9 @@ if __name__ == "__main__":
         after()
       except Exception, e:
         raise e
+
+if __name__ == "__main__":
+  run()
 # }}}
 
 # vim: set foldmethod marker
