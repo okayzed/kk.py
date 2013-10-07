@@ -757,7 +757,7 @@ def setup_general_hooks():
 palette = [
   ('highlight', 'white', 'dark gray'),
   ('banner', 'black', 'white'),
-  ('default', 'black', 'dark gray'),
+  ('default', 'black', 'white'),
   ('diff_add', 'white', 'light green'),
   ('diff_del', 'white', 'light red'),
   ('streak', 'black', 'dark red'),
@@ -802,6 +802,7 @@ class Viewer(object):
     self.last_search_token = None
     self.clear_edit_text = False
     self.syntax_colored = False
+    self.fname = None
 
   def update_pager(self):
     debug("UPDATING PAGER")
@@ -1186,14 +1187,16 @@ class Viewer(object):
       return newline
       # end of handle_token function
 
-    def add_diff_lines_to_walker(lines, walker, clear_walker=True, cb=None):
+    def add_diff_lines_to_walker(lines, walker, clear_walker=True, cb=None, fname=None):
+
       if clear_walker:
         walker[:] = [ ]
 
       wlines = []
-      lexer = None
-      fname = None
+      lines = "".join([clear_escape_codes(line) for line in lines]).split("\n")
 
+      # stupid \n ending required...
+      lines = ["%s\n" % line for line in lines]
       iterator = iter(lines)
       index = 0
       for line in iterator:
@@ -1217,21 +1220,22 @@ class Viewer(object):
 
           author_index = 1
           for windex, wline in enumerate(wlines):
-            if wline.startswith("Author"):
+            if wline.startswith("Author:"):
               author_index = windex
 
           reg_lines = wlines[author_index-1:] + reg_lines
           wlines = wlines[:author_index-1]
 
           if wlines:
-            add_lines_to_walker(wlines, walker, fname, diff=True)
-            add_lines_to_walker(["\n"], walker, fname, diff=False)
+            add_lines_to_walker(wlines, walker, self.fname, diff=True)
+            add_lines_to_walker(["\n"], walker, self.fname, diff=True)
 
           if reg_lines:
-            add_lines_to_walker(reg_lines, walker, "text.txt", diff=False)
+            add_lines_to_walker(reg_lines, walker, self.fname, skip_colors=True, diff=True)
 
-          # next output
-          fname = line.split().pop()
+          # next fname output
+          self.fname = line.split().pop()
+          debug("SETTING FNAME TO", self.fname)
           wlines = [ ]
 
           def future_call(loop, user_data):
@@ -1243,12 +1247,12 @@ class Viewer(object):
 
           next_lines = lines[index:]
 
-          return self.loop.set_alarm_in(0.0001, future_call, user_data=(next_lines, walker))
+          return self.loop.set_alarm_in(0.001, future_call, user_data=(next_lines, walker))
         else:
           wlines.append(line)
 
       # When we make it to the way end, put the last file contents in
-      add_lines_to_walker(wlines, walker, fname, diff=True)
+      add_lines_to_walker(wlines, walker, self.fname, diff=True)
       self.working = False
 
       if cb:
@@ -1257,12 +1261,24 @@ class Viewer(object):
       # This is when we are finally done. (For reals)
       self.update_pager()
 
-    def add_lines_to_walker(lines, walker, fname=None, diff=False):
+    def add_lines_to_walker(lines, walker, fname=None, diff=False, skip_colors=False):
       if len(lines):
-        output = "".join(lines)
         lexer = None
+        forced = False
 
+        if not fname and skip_colors:
+          debug("LINES BEFORE LEXER", lines)
+          debug("SKIPPING COLORING", fname, diff)
+          lines = self.escape_ansi_colors([line.rstrip() for line in lines])
+          self.syntax_lang = "None"
+          walker.extend(lines)
+          return
+
+        debug("LINES BEFORE LEXER", lines)
+
+        output = "".join(lines)
         try:
+          forced = True
           lexer = pygments.lexers.guess_lexer_for_filename(fname, output)
         except:
           pass
@@ -1271,21 +1287,26 @@ class Viewer(object):
           lexer = guess_lexer(output)
 
         score = lexer.__class__.analyse_text(output)
-        if diff:
+        if diff and forced:
           self.syntax_lang = "git diff"
           debug("LEXER (FORCED) SCORE", lexer, score)
         else:
           self.syntax_lang = lexer.name
-          debug("LEXER (GUESSED) SCORE", lexer, score)
-          if score <= 0.1:
-            # COULDNT FIGURE OUT A GOOD SYNTAX HIGHLIGHTER
-            # DISABLE IT
-            lexer = pygments.lexers.get_lexer_by_name('text')
-            self.syntax_lang = "none. (Couldn't auto-detect a syntax)"
+          debug("LEXER (TRIED: %s) and (GUESSED) SCORE" % (fname), lexer, score)
+          if score < 0.3:
+            lexer = guess_lexer(output)
+            score = lexer.__class__.analyse_text(output)
+            debug("LEXER REGUESSED SCORE", lexer, score)
 
-            lines = self.escape_ansi_colors([line.rstrip() for line in lines])
-            walker.extend(lines)
-            return
+            if score < 0.3:
+              # COULDNT FIGURE OUT A GOOD SYNTAX HIGHLIGHTER
+              # DISABLE IT
+              lexer = pygments.lexers.get_lexer_by_name('text')
+              self.syntax_lang = "none. (Couldn't auto-detect a syntax)"
+
+              lines = self.escape_ansi_colors([line.rstrip() for line in lines])
+              walker.extend(lines)
+              return
 
         tokens = lexer.get_tokens(output)
 
@@ -1304,6 +1325,7 @@ class Viewer(object):
 
     lines = self.ret['lines']
     if self.ret['joined'].find("diff --git") >= 0:
+      debug("ADDING DIFF LINES TO WALKER")
       def make_cb():
         original_widget = self.window.original_widget
         started = time.time()
@@ -1351,4 +1373,4 @@ if __name__ == "__main__":
   run()
 # }}}
 
-# vim: set foldmethod marker
+# vim: set foldmethod=marker

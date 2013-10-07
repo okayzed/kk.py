@@ -1,3 +1,4 @@
+v0.0.5, 10/07/2013 -- better diff highlight
 v0.0.4, 10/06/2013 -- Updated docs
 v0.0.3, 10/06/2013 -- Remove debugging files.
 v0.0.2, 10/06/2013 -- (don't submit buggy app)
