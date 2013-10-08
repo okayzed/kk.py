@@ -20,6 +20,8 @@
 # x compare two different outputs (current buffer and xsel sound good to me)
 # GENERAL:
 # x speed up the log parsing for git commits (make this more asynchronous)
+# BUGS
+# fix partial syntax highlighting that can happen when switching during reading
 
 # TODO
 
@@ -35,7 +37,6 @@
 # o grab all hex colors
 
 # BUGS:
-# fix partial syntax highlighting that can happen when switching during reading
 
 # }}}
 
@@ -51,7 +52,7 @@ import time
 import urlparse
 import urwid
 import fileinput
-
+import threading
 
 import pygments
 import pygments.formatters
@@ -305,7 +306,7 @@ class MenuOverlay(object):
 def do_syntax_coloring(kv, ret, widget):
   kv.toggle_syntax_coloring()
 
-def iterate_and_match_tokens_worker(kv, tokens, focused_line_no, func, overlay, cur_closest_distance=10000000000, closest_token=None):
+def iterate_and_match_tokens_worker(kv, tokens, focused_line_no, func, overlay, cur_closest_distance=10000000000, closest_token=None, focused_once=False):
   visited = {}
   debug("ITERATE AND MATCH WORKER")
 
@@ -323,25 +324,29 @@ def iterate_and_match_tokens_worker(kv, tokens, focused_line_no, func, overlay, 
           closest_token = token_index
           debug("SETTING CLOSEST TOKEN", closeness, closest_token)
 
-        elif closeness > cur_closest_distance and closest_token:
+        elif closeness > cur_closest_distance and closest_token and not focused_once:
           # TIME TO FOCUS.
           debug("FOCUSING CLOSEST TOKEN", closest_token)
           overlay.focus(closest_token)
+          focused_once = True
 
 
 
-        if not index % 10:
-          def future_call(loop, tokens):
-            iterate_and_match_tokens_worker(kv,
-              tokens,
-              focused_line_no,
-              func,
-              overlay,
-              cur_closest_distance=cur_closest_distance,
-              closest_token=closest_token)
+        def future_call(tokens):
+          iterate_and_match_tokens_worker(kv,
+            tokens,
+            focused_line_no,
+            func,
+            overlay,
+            cur_closest_distance=cur_closest_distance,
+            closest_token=closest_token,
+            focused_once=focused_once)
 
-          next_tokens = tokens[index+1:]
-          return kv.loop.set_alarm_in(0.001, future_call, user_data=next_tokens)
+        next_tokens = tokens[index+1:]
+        thread=threading.Thread(target=future_call, args=[next_tokens])
+        thread.start()
+        kv.redraw_parent()
+        return
 
 
 def iterate_and_match_tokens(tokens, focused_line_no, func):
@@ -503,13 +508,16 @@ def do_get_urls(kv, ret, widget=None):
   overlay = MenuOverlay(widget, title="Choose a URL to open", cb=func)
   iterate_and_match_tokens_worker(kv, ret['tokens'], focused_line, url_matcher, overlay)
 
+def do_exit():
+  raise urwid.ExitMainLoop()
+
 
 def do_print(kv, ret, scr):
   def func():
     print ret['joined']
 
   kv.after_urwid.append(func)
-  raise urwid.ExitMainLoop()
+  do_exit()
 
 def do_back_or_quit(kv, ret, widget):
   if widget.overlay_opened:
@@ -821,14 +829,16 @@ class Viewer(object):
     self.prompt_mode = ""
     self.last_search = ""
     self.stack = []
-    self.working = False
     self.last_search_index = 0
     self.last_search_token = None
     self.clear_edit_text = False
     self.syntax_colored = False
     self.fname = None
+    self.last_repaint = time.time()
     self.ret = None
+    self.quit = False
     self.color_table = None
+    self.screen_lock = threading.Lock()
 
     self.build_color_table()
 
@@ -836,6 +846,7 @@ class Viewer(object):
   def reset_line_stats(self):
     self.ret = {}
     self.ret['maxx'] = 0
+    self.ret['syntax_lines'] = 0
     self.ret['maxy'] = 0
     self.ret['numlines'] = 0
     self.ret['has_content'] = False
@@ -850,11 +861,14 @@ class Viewer(object):
       start_line = self.window.original_widget.get_top_index()
       end_line = self.window.original_widget.get_bottom_index() + 1
     except Exception, e:
-      debug("UPDATE PAGER EXCEPTION", e)
       return
 
     if not line_count:
-      line_count = self.ret['maxy']
+      if self.syntax_colored:
+        line_count = self.ret['syntax_lines']
+      if not self.syntax_colored:
+        line_count = self.ret['maxy']
+
     if not line_count:
       fraction = 0
       return
@@ -877,7 +891,9 @@ class Viewer(object):
 
     if len(self.stack):
       pager_msg = "%s %s" % (pager_msg, len(self.stack) * '=')
+
     self.display_pager_msg(pager_msg)
+    self.redraw_parent()
 
   def run(self, stdscr):
     # We're done with stdin,
@@ -910,6 +926,7 @@ class Viewer(object):
       return unhandled
 
     def unhandle_input(key):
+      self.last_repaint = time.time()
       if self.in_command_prompt:
         if key == 'enter':
           do_command_entered(self, self.ret, widget)
@@ -941,6 +958,11 @@ class Viewer(object):
     self.close_command_line()
     self.loop = urwid.MainLoop(self.panes, palette, unhandled_input=unhandle_input, input_filter=handle_input)
 
+    def pipe_cb(data):
+      return True
+
+    self.redraw_pipe = self.loop.watch_pipe(pipe_cb)
+
     self.display_status_msg(('banner', "Welcome to the kitchen sink pager. Press '?' for shortcuts"))
 
     self.display_lines([])
@@ -952,11 +974,19 @@ class Viewer(object):
     if self.ret['has_content']:
       try:
         self.loop.run()
-      except KeyboardInterrupt:
-        pass
+      except:
+        self.quit = True
+      finally:
+        self.quit = True
 
-  def repaint_screen(self):
-    self.loop.draw_screen()
+  def redraw_parent(self, force=False):
+    os.write(self.redraw_pipe, "REDRAW THYSELF\n")
+
+  # for reals. this is a stub, but used to get an entry point back into the
+  # main loop and redraw the screen
+  def repaint_screen(self, force=False):
+    pass
+
 
   def open_command_line(self, mode=':'):
     self.prompt_mode = mode
@@ -1132,27 +1162,36 @@ class Viewer(object):
       self.read_line(line, ret)
       append_lines.append(line)
 
-      if not index % 1000:
+      if self.quit:
+        sys.exit(0)
+
+      if not index % 100:
         wlines = self.escape_ansi_colors(append_lines, syntax_colored)
         for wline in wlines:
+          if self.quit:
+            sys.exit(0)
           walker.append(wline)
 
-        def future_call(loop, lines):
+        def future_call(lines):
           self.read_while_displaying_lines(lines, walker, ret, syntax_colored)
           self.update_pager()
 
         next_lines = list(gen)
         if len(next_lines):
-          self.loop.set_alarm_in(0.01, future_call, user_data=next_lines)
-        scheduled_work = True
+          thread = threading.Thread(target=future_call, args=[next_lines])
+          if not self.quit:
+            thread.start()
+          scheduled_work = True
         break
 
     if not scheduled_work:
       wlines = self.escape_ansi_colors(append_lines, syntax_colored)
+      self.ret['syntax_lines'] += len(wlines)
       for wline in wlines:
         walker.append(wline)
 
       ret['joined'] = "".join(ret['lines'])
+      self.update_pager()
 
 
   def read_and_display(self, lines=None):
@@ -1319,7 +1358,7 @@ class Viewer(object):
       iterator = itertools.count(index)
       for index in iterator:
 
-        if index >= len(ret['lines']):
+        if index >= len(ret['lines']) or self.quit:
           break
 
         line = clear_escape_codes(ret['lines'][index])
@@ -1368,25 +1407,25 @@ class Viewer(object):
           self.fname = line.split().pop()
           debug("SETTING FNAME TO", self.fname)
 
-          def future_call(loop, user_data):
-            index, walker = user_data
-            self.working = True
-            if self.syntax_colored:
-              self.update_pager(len(walker))
+          def future_call(index, walker):
+            self.update_pager()
+            self.ret['syntax_lines'] = index
             add_diff_lines_to_walker(ret, index, walker, clear_walker=False, cb=cb)
-            self.working = False
 
-          return self.loop.set_alarm_in(0.001, future_call, user_data=(index, walker))
+          thread = threading.Thread(target=future_call, args=(index, walker))
+          if not self.quit:
+            thread.start()
+          return
         else:
           wlines.append(line)
 
       # When we make it to the way end, put the last file contents in
       add_lines_to_walker(wlines, walker, self.fname, diff=True)
-      self.working = False
 
       if cb:
         cb()
 
+      self.ret['syntax_lines'] = index
       # This is when we are finally done. (For reals)
       self.update_pager()
 
@@ -1465,7 +1504,8 @@ class Viewer(object):
           if ended - started < 1:
             self.readjust_display(original_widget, focused_index)
 
-          self.update_pager()
+          if not self.syntax_colored:
+            self.update_pager()
 
         return func
       add_diff_lines_to_walker(self.ret, 0, walker, cb=make_cb())
