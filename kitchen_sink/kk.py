@@ -101,7 +101,7 @@ def debug(*args):
 # }}}
 
 # {{{ input
-def tokenize(lines):
+def tokenize(lines, start_index=0):
   # http://redd.it (example URL)
   all_tokens = []
   for index, line in enumerate(lines):
@@ -110,58 +110,16 @@ def tokenize(lines):
     while col < len(line) and line[col] == " ":
       col += 1
 
-    tokens = clear_escape_codes(line).split()
+    tokens = line.split()
     for token in tokens:
       all_tokens.append({
         "text" : token,
-        "line" : index,
+        "line" : start_index + index,
         "col" : col
       })
 
       col += len(token) + 1
   return all_tokens
-
-def read_lines(in_lines=None):
-  maxx = 0
-  numlines = 0
-  content = False
-
-  if not in_lines:
-    gen = fileinput.input()
-  else:
-    gen = in_lines
-
-  lines = []
-  for line in gen:
-    maxx = max(maxx, len(line))
-    if line.count("\n"):
-      numlines += line.count("\n")
-    else:
-      numlines += 1
-    # strip some stuff out
-    lines.append(line)
-    if not content and line.strip() != "":
-      content = True
-
-  maxy = numlines
-
-  joined = ''.join(lines)
-
-  # this is the second pass, and where the actual parsing of tokens should
-  # probably happen. In addition, we should look at the tokens in each line and
-  # maybe highlight specific ones? #www.yahoo.com
-
-  all_tokens = tokenize(lines)
-
-  return {
-    "maxx": maxx,
-    "maxy": maxy,
-    "lines": lines,
-    "joined" : joined,
-    "tokens" : all_tokens,
-    "has_content" : content
-  }
-
 
 "http://google.com/the/first/one"
 
@@ -870,6 +828,21 @@ class Viewer(object):
     self.clear_edit_text = False
     self.syntax_colored = False
     self.fname = None
+    self.ret = None
+    self.color_table = None
+
+    self.build_color_table()
+
+
+  def reset_line_stats(self):
+    self.ret = {}
+    self.ret['maxx'] = 0
+    self.ret['maxy'] = 0
+    self.ret['numlines'] = 0
+    self.ret['has_content'] = False
+    self.ret['joined'] = ""
+    self.ret['lines'] = []
+    self.ret['tokens'] = []
 
   def update_pager(self):
     debug("UPDATING PAGER")
@@ -884,6 +857,10 @@ class Viewer(object):
       return
 
     line_count = self.ret['maxy']
+    if not line_count:
+      fraction = 0
+      return
+
     fraction = min(float(middle_line) / float(line_count) * 100, 100)
 
     line_no = middle_line
@@ -904,14 +881,8 @@ class Viewer(object):
     self.display_pager_msg(pager_msg)
 
   def run(self, stdscr):
-    ret = read_lines(None)
-    self.ret = ret
-
     # We're done with stdin,
     # now we want to read input from current terminal
-    with open("/dev/tty") as f:
-      os.dup2(f.fileno(), 0)
-
     def handle_input(keys, raw):
       global _key_hooks
       unhandled = []
@@ -963,7 +934,6 @@ class Viewer(object):
     self.window = widget
 
     self.panes = urwid.Frame(widget, footer=self.command_line)
-    self.display_lines(ret["lines"])
 
     self.pager = urwid.Text("")
     self.prompt = urwid.Edit()
@@ -973,7 +943,14 @@ class Viewer(object):
     self.loop = urwid.MainLoop(self.panes, palette, unhandled_input=unhandle_input, input_filter=handle_input)
 
     self.display_status_msg(('banner', "Welcome to the kitchen sink pager. Press '?' for shortcuts"))
-    if ret['has_content']:
+
+    self.display_lines([])
+    self.read_and_display()
+    # Don't re-open the TTY until after reading stdin
+    with open("/dev/tty") as f:
+      os.dup2(f.fileno(), 0)
+
+    if self.ret['has_content']:
       try:
         self.loop.run()
       except KeyboardInterrupt:
@@ -1001,9 +978,9 @@ class Viewer(object):
     self.in_command_prompt = False
     self.panes.set_focus('body')
 
-  def escape_ansi_colors(self, lines):
-    wlist = []
-    def build_color_table():
+  def build_color_table(self):
+
+    if not self.color_table:
       table = {"[0":'default'}
 
       for index, color in enumerate(COLORS):
@@ -1016,10 +993,14 @@ class Viewer(object):
         for jindex, jcolor in enumerate(COLORS):
           table["[%s;%s" % (30+index, 40 + jindex)] = "%s_%s" % (color, jcolor)
 
-      return table
+      self.color_table = table
 
+    return self.color_table
 
-    table = build_color_table()
+  def escape_ansi_colors(self, lines):
+    wlist = []
+
+    table = self.color_table
     for line in lines:
       col = 0
       stripped = line.lstrip()
@@ -1069,17 +1050,19 @@ class Viewer(object):
         wlist.append(urwid.Text(''))
     return wlist
 
-  def display_lines(self, lines):
+  def new_display(self):
     self.syntax_colored = False
     self.previous_widget = None
-
     widget = self.window
+    self.walker = urwid.SimpleListWalker([])
+    text = TextBox(self.walker)
+    widget.original_widget = text
 
+  def display_lines(self, lines=[]):
+    self.new_display()
     lines = "".join(lines).split("\n")
     wlist = self.escape_ansi_colors(lines)
-    walker = urwid.SimpleListWalker(wlist)
-    text = TextBox(walker)
-    widget.original_widget = text
+    self.walker.extend(wlist)
 
   def get_focus_index(self, widget):
     return widget.get_middle_index()
@@ -1101,12 +1084,69 @@ class Viewer(object):
     listbox.set_focus_valign('middle')
     self.update_pager()
 
-  def read_and_display(self, lines):
-    self.stack.append(self.ret)
-    self.ret['focused_index'] = self.get_focus_index(self.window.original_widget)
+  def read_line(self, line, ret=None):
+    if not ret:
+      ret = self.ret
 
-    self.ret = read_lines(lines)
-    self.display_lines(lines)
+    eline = clear_escape_codes(line)
+    ret['tokens'].extend(tokenize([eline], ret['maxy']))
+    ret['maxx'] = max(ret['maxx'], len(eline))
+    ret['maxy'] += 1
+    ret['numlines'] += line.count("\n")
+    ret['has_content'] = True
+    ret['lines'].append(line)
+
+  def read_while_displaying_lines(self, lines=None, walker=None, ret=None):
+    if not walker:
+      walker = self.walker
+
+    if not ret:
+      ret = self.ret
+
+    if not lines:
+      gen = fileinput.input()
+    else:
+      resplit_lines = ["%s\n" % line for line in "".join(lines).split("\n")]
+      resplit_lines[-1] = resplit_lines[-1].rstrip()
+      gen = iter(resplit_lines)
+
+    index = 0
+    async = False
+    for line in gen:
+      index += 1
+      self.read_line(line, ret)
+      wlines = self.escape_ansi_colors([line])
+      for wline in wlines:
+        walker.append(wline)
+
+      if not index % 1000:
+        def future_call(loop, lines):
+          self.read_while_displaying_lines(lines, walker, ret)
+          self.update_pager()
+
+        self.loop.set_alarm_in(0.01, future_call, user_data=list(gen))
+        async = True
+        break
+
+    if not async:
+      ret['joined'] = "".join(ret['lines'])
+
+
+  def read_and_display(self, lines=None):
+    del self.walker[:]
+
+    if self.ret:
+      self.stack.append(self.ret)
+
+    self.reset_line_stats()
+    self.new_display()
+
+    try:
+      self.ret['focused_index'] = self.get_focus_index(self.window.original_widget)
+    except:
+      pass
+
+    self.read_while_displaying_lines(lines)
 
   def restore_last_display(self):
     if self.stack:
