@@ -47,6 +47,8 @@ import sys
 import time
 import urlparse
 import urwid
+import fileinput
+
 
 import pygments
 import pygments.formatters
@@ -62,6 +64,9 @@ def consume(iterator, n):
 
 def clear_escape_codes(line):
   # clear color codes
+  if line.find('\033') == -1:
+    return line
+
   newline = re.sub('\033\[\d*;?\d*m', '', line)
   # jank escape code clearing methodology. need to update as new codes found
   newline = re.sub('\033\[\d*[ABCDEFGHIJK]', '', newline)
@@ -81,6 +86,7 @@ def add_vim_movement():
     urwid.command_map[key] = updatedMappings[key]
 
 
+PROFILE=False
 DEBUG=False
 if DEBUG:
   debugfile = open(__name__ + ".debug", "w")
@@ -104,10 +110,10 @@ def tokenize(lines):
     while col < len(line) and line[col] == " ":
       col += 1
 
-    tokens = line.split()
+    tokens = clear_escape_codes(line).split()
     for token in tokens:
       all_tokens.append({
-        "text" : clear_escape_codes(token),
+        "text" : token,
         "line" : index,
         "col" : col
       })
@@ -121,17 +127,18 @@ def read_lines(in_lines=None):
   content = False
 
   if not in_lines:
-    in_lines = list(sys.stdin.readlines())
+    gen = fileinput.input()
+  else:
+    gen = in_lines
 
   lines = []
-  for line in in_lines:
+  for line in gen:
     maxx = max(maxx, len(line))
     if line.count("\n"):
       numlines += line.count("\n")
     else:
       numlines += 1
     # strip some stuff out
-    line = line.replace('[\x01-\x1F\x7F]', '')
     lines.append(line)
     if not content and line.strip() != "":
       content = True
@@ -1037,9 +1044,7 @@ class Viewer(object):
               split_index = ESCAPE_CODE.search(text).start()
               if split_index >= 0:
                 split_at = [at[:split_index+1], at[split_index+1:]]
-
-                if len(split_at) > 1:
-                  text = split_at.pop()
+                text = split_at.pop()
 
               attr = None
 
@@ -1420,7 +1425,7 @@ class Viewer(object):
       msg = ('highlight', msg)
     self.pager.set_text(msg)
 
-def run():
+def _run():
   kv = Viewer()
   curses.wrapper(kv.run)
   for after in kv.after_urwid:
@@ -1430,6 +1435,12 @@ def run():
       except Exception, e:
         raise e
 
+def run():
+  if PROFILE:
+    import cProfile
+    cProfile.run("_run()", "restats")
+  else:
+    _run()
 if __name__ == "__main__":
   run()
 # }}}
