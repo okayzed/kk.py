@@ -334,6 +334,7 @@ class MenuOverlay(object):
 
   def focus(self, index):
     self.listbox.set_focus(index)
+    self.listbox.set_focus_valign('middle')
 
 
 
