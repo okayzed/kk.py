@@ -34,6 +34,9 @@
 # o print a hex color in multiple formats?
 # o grab all hex colors
 
+# BUGS:
+# fix partial syntax highlighting that can happen when switching during reading
+
 # }}}
 
 # {{{ imports
@@ -62,14 +65,17 @@ def consume(iterator, n):
   collections.deque(itertools.islice(iterator, n), maxlen=0)
 
 
+digit_color_re = re.compile('\033\[\d*;?\d*m')
+escape_code_re = re.compile('\033\[\d*[ABCDEFGHIJK]')
+
 def clear_escape_codes(line):
   # clear color codes
   if line.find('\033') == -1:
     return line
 
-  newline = re.sub('\033\[\d*;?\d*m', '', line)
+  newline = digit_color_re.sub('', line)
   # jank escape code clearing methodology. need to update as new codes found
-  newline = re.sub('\033\[\d*[ABCDEFGHIJK]', '', newline)
+  newline = escape_code_re.sub('', newline)
   return newline
 
 def add_vim_movement():
@@ -105,20 +111,13 @@ def tokenize(lines, start_index=0):
   # http://redd.it (example URL)
   all_tokens = []
   for index, line in enumerate(lines):
-    col = 0
-
-    while col < len(line) and line[col] == " ":
-      col += 1
-
     tokens = line.split()
     for token in tokens:
       all_tokens.append({
         "text" : token,
-        "line" : start_index + index,
-        "col" : col
+        "line" : start_index + index
       })
 
-      col += len(token) + 1
   return all_tokens
 
 "http://google.com/the/first/one"
@@ -997,7 +996,7 @@ class Viewer(object):
 
     return self.color_table
 
-  def escape_ansi_colors(self, lines):
+  def escape_ansi_colors(self, lines, syntax_colored=False):
     wlist = []
 
     table = self.color_table
@@ -1008,7 +1007,7 @@ class Viewer(object):
       markup = []
       stripped = line.rstrip()
       newline = False
-      if not self.syntax_colored:
+      if not syntax_colored:
         if stripped.find("\033") >= 0:
           split_strip = stripped.split("\033")
           markup.append(split_strip[0])
@@ -1045,10 +1044,11 @@ class Viewer(object):
         line = (None, line)
 
       if line:
-        wlist.append(urwid.Text(line))
+        wlist.append(line)
       if newline:
-        wlist.append(urwid.Text(''))
-    return wlist
+        wlist.append('')
+
+    return [ urwid.Text(line) for line in wlist ]
 
   def new_display(self):
     self.syntax_colored = False
@@ -1065,7 +1065,10 @@ class Viewer(object):
     self.walker.extend(wlist)
 
   def get_focus_index(self, widget):
-    return widget.get_middle_index()
+    try:
+      return widget.get_middle_index()
+    except:
+      return 0
 
   def readjust_display(self, listbox, index):
     if self.last_search_token:
@@ -1089,14 +1092,20 @@ class Viewer(object):
       ret = self.ret
 
     eline = clear_escape_codes(line)
-    ret['tokens'].extend(tokenize([eline], ret['maxy']))
+
+    tokens = ret['tokens']
+    for index, token in enumerate(eline.split()):
+      tokens.append({
+        "line": ret['maxy'] + index,
+        "text" : token })
+
     ret['maxx'] = max(ret['maxx'], len(eline))
     ret['maxy'] += 1
     ret['numlines'] += line.count("\n")
     ret['has_content'] = True
     ret['lines'].append(line)
 
-  def read_while_displaying_lines(self, lines=None, walker=None, ret=None):
+  def read_while_displaying_lines(self, lines=None, walker=None, ret=None, syntax_colored=None):
     if not walker:
       walker = self.walker
 
@@ -1106,29 +1115,39 @@ class Viewer(object):
     if not lines:
       gen = fileinput.input()
     else:
-      resplit_lines = ["%s\n" % line for line in "".join(lines).split("\n")]
-      resplit_lines[-1] = resplit_lines[-1].rstrip()
-      gen = iter(resplit_lines)
+      gen = iter(lines)
+
+    if syntax_colored is None:
+      syntax_colored = self.syntax_colored
 
     index = 0
-    async = False
+    scheduled_work = False
+    append_lines = []
     for line in gen:
       index += 1
       self.read_line(line, ret)
-      wlines = self.escape_ansi_colors([line])
+      append_lines.append(line)
+
+      if not index % 1000:
+        wlines = self.escape_ansi_colors(append_lines, syntax_colored)
+        for wline in wlines:
+          walker.append(wline)
+
+        def future_call(loop, lines):
+          self.read_while_displaying_lines(lines, walker, ret, syntax_colored)
+          self.update_pager()
+
+        next_lines = list(gen)
+        if len(next_lines):
+          self.loop.set_alarm_in(0.01, future_call, user_data=next_lines)
+        scheduled_work = True
+        break
+
+    if not scheduled_work:
+      wlines = self.escape_ansi_colors(append_lines, syntax_colored)
       for wline in wlines:
         walker.append(wline)
 
-      if not index % 1000:
-        def future_call(loop, lines):
-          self.read_while_displaying_lines(lines, walker, ret)
-          self.update_pager()
-
-        self.loop.set_alarm_in(0.01, future_call, user_data=list(gen))
-        async = True
-        break
-
-    if not async:
       ret['joined'] = "".join(ret['lines'])
 
 
@@ -1141,11 +1160,12 @@ class Viewer(object):
     self.reset_line_stats()
     self.new_display()
 
-    try:
-      self.ret['focused_index'] = self.get_focus_index(self.window.original_widget)
-    except:
-      pass
+    self.ret['focused_index'] = self.get_focus_index(self.window.original_widget)
 
+    if lines:
+      resplit_lines = ["%s\n" % line for line in "".join(lines).split("\n")]
+      resplit_lines[-1] = resplit_lines[-1].rstrip()
+      lines = resplit_lines
     self.read_while_displaying_lines(lines)
 
   def restore_last_display(self):
@@ -1405,13 +1425,13 @@ class Viewer(object):
             lexer = pygments.lexers.get_lexer_by_name('text')
             self.syntax_lang = "none. (Couldn't auto-detect a syntax)"
 
-            lines = self.escape_ansi_colors([line.rstrip() for line in lines])
+            lines = self.escape_ansi_colors([line.rstrip() for line in lines], self.syntax_colored)
             walker.extend(lines)
             return
 
         if lexer.__class__ is pygments.lexers.TextLexer:
           debug("TEXT LEXER! DISABLING")
-          lines = self.escape_ansi_colors(["%s" % line.rstrip() for line in lines])
+          lines = self.escape_ansi_colors(["%s" % line.rstrip() for line in lines], self.syntax_colored)
           walker.extend(lines)
           return
 
@@ -1481,6 +1501,7 @@ def run():
     cProfile.run("_run()", "restats")
   else:
     _run()
+
 if __name__ == "__main__":
   run()
 # }}}
