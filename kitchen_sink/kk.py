@@ -17,7 +17,9 @@
 # x create a stack for jumping between opened buffers
 # x pipe buffer into a command and re-open pager on new output
 # x yank the output into xsel buffer
-# o compare two different outputs (current buffer and xsel sound good to me)
+# x compare two different outputs (current buffer and xsel sound good to me)
+# GENERAL:
+# x speed up the log parsing for git commits (make this more asynchronous)
 
 # TODO
 
@@ -85,7 +87,6 @@ if DEBUG:
   debugfile.close()
 
 def debug(*args):
-
   if DEBUG:
     debugfile = open(__name__ + ".debug", "a")
     print >> debugfile, " ".join([str(i) for i in args])
@@ -288,40 +289,95 @@ class OverlayStack(urwid.WidgetPlaceholder):
 
 # {{{ character handlers
 
-def overlay_menu(widget, title="", items=[], focused=None, cb=None, modal_keys=None):
-  def button(text, value):
+class MenuOverlay(object):
+  def __init__(self, *args, **kwargs):
+    self.build_menu(*args, **kwargs)
+
+  def build_button(self, text, value):
     def button_pressed(but):
-      debug("BUTTON PRESSED", title, text)
-      cb(text)
+      self.cb(text)
 
     button = urwid.Button(text[:40], on_press=button_pressed)
     button.button_text = value
 
     return button
 
-  walker = urwid.SimpleListWalker([button(token, token) for token in items])
-  listbox = urwid.ListBox(walker)
-  url_window = urwid.LineBox(listbox)
+  def build_menu(self, widget=None, title="", items=[], focused=None, cb=None, modal_keys=None):
 
-  focused_index = 0
-  for index, token in enumerate(walker):
-    if token.button_text == focused:
-      # Need to account for the insertion of the title at the start (below), so
-      # we add 1
+    self.cb = cb
+    walker = urwid.SimpleListWalker([self.button(token, token) for token in items])
+    self.listbox = urwid.ListBox(walker)
+    self.linebox = urwid.LineBox(self.listbox)
 
-      focused_index = index + 1
+    focused_index = 0
+    for index, token in enumerate(walker):
+      if token.button_text == focused:
+        # Need to account for the insertion of the title at the start (below), so
+        # we add 1
 
-  walker.insert(0, urwid.Text(title))
+        focused_index = index + 1
 
-  try:
-    listbox.set_focus(focused_index)
-  except:
-    pass
+    walker.insert(0, urwid.Text(title))
 
-  widget.open_overlay(url_window, modal_keys=modal_keys)
+    try:
+      self.listbox.set_focus(focused_index)
+    except:
+      pass
+
+    widget.open_overlay(self.linebox, modal_keys=modal_keys)
+
+  def add_entry(self, entry):
+    button = self.build_button(entry, entry)
+    index = len(self.listbox.body)
+    self.listbox.body.append(button)
+    return index
+
+  def focus(self, index):
+    self.listbox.set_focus(index)
+
+
 
 def do_syntax_coloring(kv, ret, widget):
   kv.toggle_syntax_coloring()
+
+def iterate_and_match_tokens_worker(kv, tokens, focused_line_no, func, overlay, cur_closest_distance=10000000000, closest_token=None):
+  visited = {}
+  debug("ITERATE AND MATCH WORKER")
+
+  for index, token in enumerate(tokens):
+    text = token['text']
+    if not text in visited:
+      visited[text] = True
+
+      ret = func(text, visited)
+      if ret:
+        closeness = abs(focused_line_no - token['line'])
+        token_index = overlay.add_entry(ret)
+        if closeness < cur_closest_distance:
+          cur_closest_distance = closeness
+          closest_token = token_index
+          debug("SETTING CLOSEST TOKEN", closeness, closest_token)
+
+        elif closeness > cur_closest_distance and closest_token:
+          # TIME TO FOCUS.
+          debug("FOCUSING CLOSEST TOKEN", closest_token)
+          overlay.focus(closest_token)
+
+
+
+        if not index % 10:
+          def future_call(loop, tokens):
+            iterate_and_match_tokens_worker(kv,
+              tokens,
+              focused_line_no,
+              func,
+              overlay,
+              cur_closest_distance=cur_closest_distance,
+              closest_token=closest_token)
+
+          next_tokens = tokens[index+1:]
+          return kv.loop.set_alarm_in(0.001, future_call, user_data=next_tokens)
+
 
 def iterate_and_match_tokens(tokens, focused_line_no, func):
   files = []
@@ -363,10 +419,6 @@ def do_get_git_objects(kv, ret, widget):
         return filename[:10]
 
   focused_line = kv.window.original_widget.get_middle_index()
-  files, closest_token = iterate_and_match_tokens(ret['tokens'], focused_line, git_matcher)
-
-  if not len(files):
-    files.append("No git objects found in document")
 
   def func(response):
     contents = subprocess.check_output(['git', 'show', response])
@@ -374,7 +426,8 @@ def do_get_git_objects(kv, ret, widget):
     widget.close_overlay()
     kv.read_and_display(lines)
 
-  overlay_menu(widget, title="Choose a git object to open", items=files, cb=func, focused=closest_token)
+  overlay = MenuOverlay(widget=widget, title="Choose a git object to open", cb=func)
+  iterate_and_match_tokens_worker(kv, ret['tokens'], focused_line, git_matcher, overlay)
 
 
 
@@ -424,8 +477,6 @@ def do_get_files(kv, ret, widget):
       colon_text = ':'.join(text_dirs)
 
   focused_line = kv.window.original_widget.get_middle_index()
-  files, closest_token = iterate_and_match_tokens(ret['tokens'], focused_line, file_matcher)
-
   def func(response):
     split_resp = response.split(':')
     line_no = 0
@@ -440,8 +491,6 @@ def do_get_files(kv, ret, widget):
       debug("EXCEPTION", e)
 
     kv.window.original_widget.set_focus(int(line_no))
-  if not len(files):
-    files.append("No Files found in buffer")
 
   def open_in_editor(kv, ret, widget):
     box = kv.window.widget.original_widget
@@ -466,8 +515,10 @@ def do_get_files(kv, ret, widget):
       "help" : "",
     }
   }
-  overlay_menu(widget, title="Choose a file to open. ('e' to open in editor)", items=files,
-    cb=func, focused=closest_token, modal_keys=modal_keys)
+  overlay = MenuOverlay(widget, title="Choose a file to open. ('e' to open in editor)",
+    cb=func, modal_keys=modal_keys)
+  iterate_and_match_tokens_worker(kv, ret['tokens'], focused_line, file_matcher, overlay)
+
 
 def do_get_urls(kv, ret, widget=None):
   tokens = ret['tokens']
@@ -477,17 +528,16 @@ def do_get_urls(kv, ret, widget=None):
     if match:
       return match.group(1)
 
+  focused_line = kv.window.original_widget.get_middle_index()
   def func(response):
     if not response.startswith('http'):
       response = "http://%s" % response
     subprocess.Popen(["/usr/bin/xdg-open", response])
     widget.close_overlay()
 
-  focused_line = kv.window.original_widget.get_middle_index()
-  urls, closest_token = iterate_and_match_tokens(ret['tokens'], focused_line, url_matcher)
-  if not len(urls):
-    urls.append("No URLs found in buffer")
-  overlay_menu(widget, title="Choose a URL to open", items=urls, cb=func, focused=closest_token)
+  overlay = MenuOverlay(widget, title="Choose a URL to open", cb=func)
+  iterate_and_match_tokens_worker(kv, ret['tokens'], focused_line, url_matcher, overlay)
+
 
 def do_print(kv, ret, scr):
   def func():
@@ -1175,7 +1225,6 @@ class Viewer(object):
         while split_line:
           n = split_line.find('\n')
           if n >= 0:
-            debug("CHOMPING NEWLINE", repr(split_line))
             last_word = split_line[:n]
             split_line = split_line[n+1:]
             formatted_line.append(last_word)
