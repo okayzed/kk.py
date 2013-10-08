@@ -843,9 +843,7 @@ class Viewer(object):
     self.ret['lines'] = []
     self.ret['tokens'] = []
 
-  def update_pager(self):
-    debug("UPDATING PAGER")
-
+  def update_pager(self, line_count=None):
     try:
       # This can throw if we aren't in text editing mode
       middle_line = self.window.original_widget.get_middle_index()
@@ -855,7 +853,8 @@ class Viewer(object):
       debug("UPDATE PAGER EXCEPTION", e)
       return
 
-    line_count = self.ret['maxy']
+    if not line_count:
+      line_count = self.ret['maxy']
     if not line_count:
       fraction = 0
       return
@@ -875,8 +874,9 @@ class Viewer(object):
     line_no = min(end_line, line_count)
 
     pager_msg = "%s/%s (%s%%)" % (line_no, line_count, fraction)
-    if self.working:
-      pager_msg = "(working)\n%s" % pager_msg
+
+    if len(self.stack):
+      pager_msg = "%s %s" % (pager_msg, len(self.stack) * '=')
     self.display_pager_msg(pager_msg)
 
   def run(self, stdscr):
@@ -1093,6 +1093,10 @@ class Viewer(object):
 
     eline = clear_escape_codes(line)
 
+    if not 'is_diff' in ret:
+      if line.find('diff --git') >= 0:
+        ret['is_diff'] = True
+
     tokens = ret['tokens']
     for index, token in enumerate(eline.split()):
       tokens.append({
@@ -1305,35 +1309,36 @@ class Viewer(object):
 
       # end of handle_token function
 
-    def add_diff_lines_to_walker(lines, walker, clear_walker=True, cb=None, fname=None):
+    def add_diff_lines_to_walker(ret, index, walker, clear_walker=True, cb=None, fname=None):
 
       if clear_walker:
         walker[:] = [ ]
 
       wlines = []
-      lines = "".join([clear_escape_codes(line) for line in lines]).split("\n")
-
       # stupid \n ending required...
-      lines = ["%s\n" % line for line in lines]
-      iterator = iter(lines)
-      index = 0
-      for line in iterator:
-        index += 1
-        line = clear_escape_codes(line)
+      iterator = itertools.count(index)
+      for index in iterator:
+
+        if index >= len(ret['lines']):
+          break
+
+        line = clear_escape_codes(ret['lines'][index])
 
         if line.startswith("diff --git"):
           diff_index = index
 
           commit_lines = [ line ]
           def add_line():
-            commit_lines.append(clear_escape_codes(iterator.next()))
+            commit_lines.append(clear_escape_codes(ret['lines'][iterator.next()]))
+            return 1
+            # doh. even though iterator is consuming it, we need this for later
 
-          add_line() # Author
-          add_line() # Date
-          add_line() # Blah
+          index += add_line() # Author
+          index += add_line() # Date
+          index += add_line() # Blah
 
+          index += 1
 
-          index += 3
 
           # Look upwards for the commit line (find the first line that starts with Author and Date)
           # and put them in commit_lines
@@ -1364,15 +1369,14 @@ class Viewer(object):
           debug("SETTING FNAME TO", self.fname)
 
           def future_call(loop, user_data):
-            lines, walker = user_data
+            index, walker = user_data
             self.working = True
-            self.update_pager()
-            add_diff_lines_to_walker(lines, walker, clear_walker=False, cb=cb)
+            if self.syntax_colored:
+              self.update_pager(len(walker))
+            add_diff_lines_to_walker(ret, index, walker, clear_walker=False, cb=cb)
             self.working = False
 
-          next_lines = lines[index:]
-
-          return self.loop.set_alarm_in(0.001, future_call, user_data=(next_lines, walker))
+          return self.loop.set_alarm_in(0.001, future_call, user_data=(index, walker))
         else:
           wlines.append(line)
 
@@ -1450,7 +1454,7 @@ class Viewer(object):
 
 
     lines = self.ret['lines']
-    if self.ret['joined'].find("diff --git") >= 0:
+    if 'is_diff' in self.ret:
       debug("ADDING DIFF LINES TO WALKER")
       def make_cb():
         original_widget = self.window.original_widget
@@ -1464,7 +1468,7 @@ class Viewer(object):
           self.update_pager()
 
         return func
-      add_diff_lines_to_walker(lines, walker, cb=make_cb())
+      add_diff_lines_to_walker(self.ret, 0, walker, cb=make_cb())
     else:
       wlines = [clear_escape_codes(line) for line in lines]
       add_lines_to_walker(wlines, walker, None)
