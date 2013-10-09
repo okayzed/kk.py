@@ -575,6 +575,8 @@ def do_diff_xsel(kv, ret, widget):
 def do_yank_text(kv, ret, widget):
   lines = [clear_escape_codes(line) for line in kv.ret['lines']]
 
+  debug(lines)
+
   args = [ 'xsel', '-pi' ]
 
   try:
@@ -1321,32 +1323,11 @@ class Viewer(object):
     self.syntax_colored = True
     focused_index = self.get_focus_index(self.previous_widget)
 
-    def highlight_token(token, formatted_line):
-      if token[1] == '+':
-        token = ('diff_add', ' ')
-        return token
-      if token[1] == '-':
-        token = ('diff_del', ' ')
-        return token
-
-      if token[1].startswith('+'):
-        formatted_line.append(('diff_add', ' '))
-        token = (token[0], token[1][1:])
-      elif token[1].startswith('-'):
-        formatted_line.append(('diff_del', ' '))
-        token = (token[0], token[1][1:])
-
-      return token
-
     formatter = UrwidFormatter()
-    def handle_token(token, newline, formatted_line, diff=False):
+    def handle_token(token, formatted_line, diff=False):
       text = token[1]
       if not text:
-        return True
-
-
-      if diff and newline:
-        token = highlight_token(token, formatted_line)
+        return
 
       if text.find('\n') >= 0:
         split_line = clear_escape_codes(text)
@@ -1355,28 +1336,15 @@ class Viewer(object):
           if n >= 0:
             last_word = split_line[:n]
             split_line = split_line[n+1:]
-
-            if len(last_word) > 0:
-              if diff:
-                formatted_line.append(highlight_token((token[0], last_word), formatted_line))
-              else:
-                formatted_line.append((token[0], last_word))
-
+            formatted_line.append(last_word)
             walker.append(urwid.Text(list(formatted_line)))
             del formatted_line[:]
           else:
             formatted_line.append((token[0], split_line))
             break
-
-        newline = True
       else:
         token = (token[0], clear_escape_codes(token[1]))
-        if diff and newline:
-          token = highlight_token(token, formatted_line)
         formatted_line.append(token)
-        newline = False
-
-      return newline
 
       # end of handle_token function
 
@@ -1517,9 +1485,8 @@ class Viewer(object):
         formatted_tokens = list(formatter.formatgenerator(tokens))
         formatted_line = []
 
-        ends_with_new_newline = True
         for token in formatted_tokens:
-          ends_with_new_newline = handle_token(token, ends_with_new_newline, formatted_line, diff)
+          handle_token(token, formatted_line, diff)
 
         if formatted_line:
           walker.append(urwid.Text(list(formatted_line)))

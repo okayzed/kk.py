@@ -1,8 +1,6 @@
-v0.0.22, 10/08/2013 -- ditto
-v0.0.21, 10/08/2013 -- multithread + yabdh
 v0.0.17, 10/08/2013 -- faster crashes.
 v0.0.9, 10/07/2013 -- less crashes.
-v0.0.6, 10/07/2013 -- yet a better diff highlight
+v0.0.6, 10/07/2013 -- yet a better dff highlight
 v0.0.5, 10/07/2013 -- better diff highlight
 v0.0.4, 10/06/2013 -- Updated docs
 v0.0.3, 10/06/2013 -- Remove debugging files.
