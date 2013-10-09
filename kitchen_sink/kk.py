@@ -155,6 +155,41 @@ def get_content_from_editor(initial=""):
         return result
 # }}}
 
+# {{{ DiffLine
+
+class DiffLine(urwid.Text):
+  def __init__(self, tokens):
+    try:
+      if len(tokens) > 0:
+        token = tokens[0]
+        list_like = False
+        if type(token) is list:
+          list_like = True
+        elif type(token) is tuple:
+          list_like = True
+
+        if list_like:
+          if tokens[0] and tokens[0][1] == '-':
+            tokens[0] = ('diff_del', ' ')
+          if tokens[0] and tokens[0][1] == '+':
+            tokens[0] = ('diff_add', ' ')
+
+
+        elif type(token) is str:
+          if token == '-':
+            tokens[0] = ('diff_del', ' ')
+          if token == '+':
+            tokens[0] = ('diff_add', ' ')
+
+
+    except Exception, e:
+      debug("DIFF LINE EXC: ", e)
+
+
+    return super(DiffLine, self).__init__(tokens)
+
+# }}}
+
 # {{{ TextBox widget
 class TextBox(urwid.ListBox):
   def __init__(self, *args, **kwargs):
@@ -307,8 +342,8 @@ def do_syntax_coloring(kv, ret, widget):
   kv.toggle_syntax_coloring()
 
 def iterate_and_match_tokens_worker(kv, tokens, focused_line_no, func, overlay, cur_closest_distance=10000000000, closest_token=None, focused_once=False):
+  debug("ITERATE AND MATCH TOKENS")
   visited = {}
-  debug("ITERATE AND MATCH WORKER")
 
   for index, token in enumerate(tokens):
     text = token['text']
@@ -344,8 +379,10 @@ def iterate_and_match_tokens_worker(kv, tokens, focused_line_no, func, overlay, 
 
         next_tokens = tokens[index+1:]
         thread=threading.Thread(target=future_call, args=[next_tokens])
-        thread.start()
+        time.sleep(0.01)
         kv.redraw_parent()
+        if not kv.quit:
+          thread.start()
         return
 
 
@@ -373,18 +410,24 @@ def iterate_and_match_tokens(tokens, focused_line_no, func):
 
 CHECKED_GIT = {}
 def is_git_like(obj):
+  obj = obj.replace('\.', '')
   if obj in CHECKED_GIT:
     return CHECKED_GIT[obj]
 
   with open(os.devnull, "w") as fnull:
-    ret = subprocess.call(['git', 'show', obj], stdout=fnull, stderr=fnull)
+    args = ['git', 'show', "-s", "--pretty=oneline", obj]
+    ret = subprocess.call(args, stdout=fnull, stderr=fnull)
+
     CHECKED_GIT[obj] = ret == 0
 
   return CHECKED_GIT[obj]
 
 def do_get_git_objects(kv, ret, widget):
   def git_matcher(filename, visited):
-    if re.search('^\w*\d*\w\d(\d|\w)+$', filename):
+    now = time.time()
+    match = re.search('[0-9a-f]{5,40}', filename)
+    if match:
+      debug(filename, "IS GIT LIKE")
       if is_git_like(filename):
         return filename[:10]
 
@@ -575,7 +618,7 @@ def do_diff_xsel(kv, ret, widget):
 def do_yank_text(kv, ret, widget):
   lines = [clear_escape_codes(line) for line in kv.ret['lines']]
 
-  debug(lines)
+  debug("YANKING", len(lines), "LINES")
 
   args = [ 'xsel', '-pi' ]
 
@@ -839,6 +882,7 @@ class Viewer(object):
     self.quit = False
     self.color_table = None
     self.screen_lock = threading.Lock()
+    self.last_redraw = time.time()
 
     self.build_color_table()
 
@@ -893,6 +937,7 @@ class Viewer(object):
       pager_msg = "%s %s" % (pager_msg, len(self.stack) * '=')
 
     self.display_pager_msg(pager_msg)
+
     self.redraw_parent()
 
   def run(self, stdscr):
@@ -974,13 +1019,17 @@ class Viewer(object):
     if self.ret['has_content']:
       try:
         self.loop.run()
-      except:
+      except Exception, e:
+        debug("EXCEPTION (QUITTING)", e)
         self.quit = True
       finally:
         self.quit = True
 
   def redraw_parent(self, force=False):
-    os.write(self.redraw_pipe, "REDRAW THYSELF\n")
+    now = time.time()
+    if now - self.last_redraw > 0.2:
+      os.write(self.redraw_pipe, "REDRAW THYSELF\n")
+      self.last_redraw = now
 
   # for reals. this is a stub, but used to get an entry point back into the
   # main loop and redraw the screen
@@ -1179,6 +1228,7 @@ class Viewer(object):
         next_lines = list(gen)
         if len(next_lines):
           thread = threading.Thread(target=future_call, args=[next_lines])
+          time.sleep(0.01)
           if not self.quit:
             thread.start()
           scheduled_work = True
@@ -1337,7 +1387,11 @@ class Viewer(object):
             last_word = split_line[:n]
             split_line = split_line[n+1:]
             formatted_line.append(last_word)
-            walker.append(urwid.Text(list(formatted_line)))
+            if diff:
+              walker.append(DiffLine(list(formatted_line)))
+            else:
+              walker.append(urwid.Text(list(formatted_line)))
+
             del formatted_line[:]
           else:
             formatted_line.append((token[0], split_line))
@@ -1413,6 +1467,7 @@ class Viewer(object):
             add_diff_lines_to_walker(ret, index, walker, clear_walker=False, cb=cb)
 
           thread = threading.Thread(target=future_call, args=(index, walker))
+          time.sleep(0.001)
           if not self.quit:
             thread.start()
           return
