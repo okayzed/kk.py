@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='KitchenSink',
-    version='0.0.20',
+    version='0.0.22',
     author='okay',
     author_email='okay.zed+kk@gmail.com',
     packages=['kitchen_sink' ],
