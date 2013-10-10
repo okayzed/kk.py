@@ -68,6 +68,7 @@ def consume(iterator, n):
 
 digit_color_re = re.compile('\033\[\d*;?\d*m')
 escape_code_re = re.compile('\033\[\d*[ABCDEFGHIJK]')
+backspace_re = re.compile('.\x08')
 
 def clear_escape_codes(line):
   # clear color codes
@@ -1084,7 +1085,7 @@ class Viewer(object):
       stripped = line.lstrip()
       col = len(line) - len(stripped)
       markup = []
-      stripped = line.rstrip()
+      stripped = backspace_re.sub('', line.rstrip())
       newline = False
       if not syntax_colored:
         if stripped.find("\033") >= 0:
