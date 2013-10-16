@@ -723,7 +723,7 @@ CURSES_HOOKS = {
   },
   "Q" : {
     "fn" : do_close_overlay_or_quit,
-    "help" : "quit kit / close current overlay"
+    "help" : "quit the kitchen sink "
   },
   "q" : {
     "fn" : do_back_or_quit,
