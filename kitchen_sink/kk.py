@@ -888,6 +888,7 @@ class Viewer(object):
     self.color_table = None
     self.screen_lock = threading.Lock()
     self.last_redraw = time.time()
+    self.will_redraw = False
 
     self.build_color_table()
 
@@ -1032,6 +1033,16 @@ class Viewer(object):
 
   def redraw_parent(self, force=False):
     now = time.time()
+
+    # Need to enforce that the redraw happens (eventually)
+    if not self.will_redraw:
+      self.will_redraw = True
+      def future_call(loop, args):
+        self.redraw_parent()
+        self.will_redraw = False
+
+      self.loop.set_alarm_in(0.1, future_call)
+
     if now - self.last_redraw > 0.2:
       os.write(self.redraw_pipe, "REDRAW THYSELF\n")
       self.last_redraw = now
