@@ -691,6 +691,7 @@ def do_open_help(kv, ret, widget):
 
   helps = []
   shortcuts = []
+  height = 3
   for item in sorted(_key_hooks.keys()):
     msg = _key_hooks[item].get('help')
     if msg:
@@ -698,13 +699,14 @@ def do_open_help(kv, ret, widget):
       shortcut.align = "left"
       help_msg = urwid.Text(msg + "  ")
       help_msg.align = "right"
+      height += 1
 
       columns = urwid.Columns([ ("fixed", 10, shortcut), ("weight", 1, help_msg)])
       listitems.append(columns)
 
   listbox = TextBox(listitems)
   widget.open_overlay(urwid.LineBox(listbox),
-    width=("relative", 80), height=("relative", 80))
+    width=70, height=height)
 
 CURSES_HOOKS = {
   ":" : {
