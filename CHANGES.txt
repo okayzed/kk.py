@@ -1,3 +1,4 @@
+v0.0.27, 10/08/2013 -- multithreading, backspace elimination, etc
 v0.0.17, 10/08/2013 -- faster crashes.
 v0.0.9, 10/07/2013 -- less crashes.
 v0.0.6, 10/07/2013 -- yet a better dff highlight

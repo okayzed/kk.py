@@ -72,12 +72,14 @@ backspace_re = re.compile('.\x08')
 
 def clear_escape_codes(line):
   # clear color codes
+  line = backspace_re.sub('', line)
   if line.find('\033') == -1:
     return line
 
   newline = digit_color_re.sub('', line)
   # jank escape code clearing methodology. need to update as new codes found
   newline = escape_code_re.sub('', newline)
+
   return newline
 
 def add_vim_movement():
