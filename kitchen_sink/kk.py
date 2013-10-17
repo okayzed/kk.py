@@ -295,12 +295,16 @@ class OverlayStack(urwid.WidgetPlaceholder):
 class MenuOverlay(object):
   def __init__(self, *args, **kwargs):
     self.build_menu(*args, **kwargs)
+    self.num_entries = 0
+    self.entries = {}
+    self.current_entry = ""
 
   def build_button(self, text, value):
     def button_pressed(but):
       self.cb(text)
 
-    button = urwid.Button(text[:40], on_press=button_pressed)
+    button_text = "[%s] %s" % (self.num_entries, text[:40])
+    button = urwid.Button(button_text, on_press=button_pressed)
     button.button_text = value
 
     return button
@@ -327,17 +331,54 @@ class MenuOverlay(object):
     except:
       pass
 
+
+    if not modal_keys:
+      modal_keys = {}
+
+    def make_func(x):
+      def handle_key(kv, ret, widget):
+        self.number_pressed(kv, x)
+
+      return handle_key
+
+    for x in xrange(10):
+      modal_keys[str(x)] = {
+        "fn" : make_func(x)
+      }
+
+    modal_keys['enter'] = { "fn" : self.confirm_action }
+
     widget.open_overlay(self.linebox, modal_keys=modal_keys)
 
   def add_entry(self, entry):
     button = self.build_button(entry, entry)
     index = len(self.listbox.body)
     self.listbox.body.append(button)
+    self.entries[str(self.num_entries)] = entry
+    self.num_entries += 1
     return index
 
   def focus(self, index):
     self.listbox.set_focus(index)
     self.listbox.set_focus_valign('middle')
+
+  def number_pressed(self, kv, x):
+    self.current_entry += str(x)
+    kv.display_status_msg("#%s" % self.current_entry)
+
+  def confirm_action(self, kv, ret, widget):
+    if self.current_entry in self.entries:
+      text = self.entries[self.current_entry]
+      kv.display_status_msg("Selecting [%s] %s" % (self.current_entry, text))
+      self.cb(text)
+
+    if not self.current_entry:
+      return True
+
+    self.current_entry = ""
+
+
+
 
 
 
@@ -531,6 +572,7 @@ def do_get_files(kv, ret, widget):
       "help" : "",
     }
   }
+
   overlay = MenuOverlay(widget, title="Choose a file to open. ('e' to open in editor)",
     cb=func, modal_keys=modal_keys)
   iterate_and_match_tokens_worker(kv, ret['tokens'], focused_line, file_matcher, overlay)
@@ -991,8 +1033,12 @@ class Viewer(object):
 
       if key in _key_hooks.keys():
         debug("KEY ", key, "PRESSED")
-        _key_hooks[key]['fn'](self, self.ret, widget)
+        stop_press = _key_hooks[key]['fn'](self, self.ret, widget)
+        if stop_press:
+          return
+
         return True
+
 
     add_vim_movement()
     widget = OverlayStack(urwid.Text(""))
