@@ -367,9 +367,13 @@ class MenuOverlay(object):
     self.current_entry += str(x)
     kv.display_status_msg("#%s" % self.current_entry)
 
+  def get_current_entry(self):
+    text = self.entries[self.current_entry]
+    return text
+
   def confirm_action(self, kv, ret, widget):
     if self.current_entry in self.entries:
-      text = self.entries[self.current_entry]
+      text = self.get_current_entry()
       kv.display_status_msg("Selecting [%s] %s" % (self.current_entry, text))
       self.cb(text)
 
@@ -554,11 +558,16 @@ def do_get_files(kv, ret, widget):
     box = kv.window.widget.original_widget
     button, index = box.get_focus()
 
-    # assuming first line is not a file
-    if not index:
-      return
+    filename = None
+    if overlay.current_entry:
+      filename = overlay.get_current_entry()
 
-    filename = button.button_text
+    if not filename:
+      # assuming first line is not a file
+      if not index:
+        return
+
+      filename = button.button_text
     split_resp = filename.split(':')
     line_no = 0
     if len(split_resp) == 2:
@@ -1219,10 +1228,8 @@ class Viewer(object):
     listbox.body[line_no] = urwid_text
 
   def readjust_display(self, listbox, index):
-    debug("READJUSTING DISPLAY")
     max_cols = min(len(listbox.body), self.ret['maxy']) - 1
     new_index = max(min(max_cols, index), 0)
-    debug("ADJUSTING DISPLAY", listbox, len(listbox.body), index, new_index, self.syntax_colored)
     listbox.set_focus(new_index)
     listbox.set_focus_valign('middle')
     self.update_pager()
