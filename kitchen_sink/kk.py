@@ -53,6 +53,7 @@ import urlparse
 import urwid
 import fileinput
 import threading
+import traceback
 
 import pygments
 import pygments.formatters
@@ -1072,7 +1073,8 @@ class Viewer(object):
       try:
         self.loop.run()
       except Exception, e:
-        debug("EXCEPTION (QUITTING)", e)
+        debug("EXCEPTION (QUITTING)", traceback.format_exc(100))
+
         self.quit = True
       finally:
         self.quit = True
@@ -1211,16 +1213,13 @@ class Viewer(object):
     except:
       return 0
 
+  def set_line(self, line_no, urwid_text, listbox=None):
+    if not listbox:
+      listbox = self.window.original_widget
+    listbox.body[line_no] = urwid_text
+
   def readjust_display(self, listbox, index):
-    if self.last_search_token:
-      text, attr = self.last_search_token.get_text()
-      self.last_search_token.set_text((None, text))
-
-
-      self.last_search_token = listbox.body[min(self.last_search_index, len(listbox.body))]
-      new_text, attr = self.last_search_token.get_text()
-      self.last_search_token.set_text(('highlight', new_text))
-
+    debug("READJUSTING DISPLAY")
     max_cols = min(len(listbox.body), self.ret['maxy']) - 1
     new_index = max(min(max_cols, index), 0)
     debug("ADJUSTING DISPLAY", listbox, len(listbox.body), index, new_index, self.syntax_colored)
@@ -1361,8 +1360,7 @@ class Viewer(object):
         tokens = tokens[start_index:]
 
       if self.last_search_token:
-        text, opts = self.last_search_token.get_text()
-        self.last_search_token.set_text((None, text))
+        self.set_line(self.last_search_index, self.last_search_token)
 
       enum_tokens = enumerate(tokens)
       if reverse:
@@ -1386,8 +1384,8 @@ class Viewer(object):
       if found:
         found_text = self.last_search_token.get_text()[0]
         debug("INDEX OF", found_text, "IS", self.last_search_index)
+        self.set_line(self.last_search_index, urwid.Text(('highlight', text)))
         self.window.original_widget.set_focus(self.last_search_index)
-        self.last_search_token.set_text(('highlight', text))
       return found
 
     found = find_word(tokens, start_index + 1)
@@ -1405,8 +1403,13 @@ class Viewer(object):
       self.display_status_msg("Disabling syntax coloring")
 
   def toggle_syntax_coloring(self):
+    if self.last_search_token:
+      self.set_line(self.last_search_index, self.last_search_token)
+      self.last_search_token = None
+
     # a shortcut
     if self.previous_widget:
+
       original_text = self.window.original_widget
       focused_index = self.get_focus_index(original_text)
       self.window.original_widget = self.previous_widget
@@ -1414,10 +1417,12 @@ class Viewer(object):
 
       debug("SYNTAX COLORING PREV WIDGET")
 
+      self.last_search_token = None
       self.syntax_colored = not self.syntax_colored
       debug("FOCUSED INDEX", focused_index)
       self.readjust_display(self.window.original_widget, focused_index)
       self.syntax_msg()
+
 
       return
 
