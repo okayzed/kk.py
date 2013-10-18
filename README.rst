@@ -27,7 +27,9 @@ Examples
     # press 's' to toggle highlighting
     git log --color -n1 -p | kk
 
-
+    # if there are numbers in the buffer,
+    # the kitchen sink math them with 'm'
+    cat lots_of_numbers.txt | kk
 
 Why another pager?
 ------------------

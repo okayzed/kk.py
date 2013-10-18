@@ -6,14 +6,14 @@
 
 # DONE
 # x locate (and open) files in the output
-# x open urls from the output
 # x preliminary terminal color support
 # x add syntax highlighting to any output
 # x add syntax highlighting to git diffs
 # x open the output in an external editor
 # x locate urls in the output
+# x open urls from the output
 # x search next word
-# x search prev function
+# x search prev word
 # x create a stack for jumping between opened buffers
 # x pipe buffer into a command and re-open pager on new output
 # x yank the output into xsel buffer
@@ -22,14 +22,13 @@
 # x speed up the log parsing for git commits (make this more asynchronous)
 # BUGS
 # fix partial syntax highlighting that can happen when switching during reading
+# MATH
+# o calculate the big stats (avg, mean, etc)
 
 # TODO
 
-# o MATH
+# MATH
 # o sum a column
-# o sum a row
-# o generate a histogram
-# o calculate the big stats (avg, mean, etc)
 
 # COLORS / WEB DEV
 # o highlight hex colors
@@ -43,7 +42,9 @@
 # {{{ imports
 import curses
 import collections
+from collections import defaultdict
 import itertools
+import math
 import os
 import re
 import subprocess
@@ -117,10 +118,11 @@ def tokenize(lines, start_index=0):
   all_tokens = []
   for index, line in enumerate(lines):
     tokens = line.split()
-    for token in tokens:
+    for t_index, token in enumerate(tokens):
       all_tokens.append({
         "text" : token,
-        "line" : start_index + index
+        "line" : start_index + index,
+        "column" : t_index
       })
 
   return all_tokens
@@ -705,6 +707,11 @@ def do_general(kv, ret, widget):
   debug("Entering general mode")
   setup_general_hooks()
 
+def do_math(kv, ret, widget):
+  debug("Entering math mode")
+  kv.summarize_math()
+
+
 def do_pipe_prompt(kv, ret, widget):
   debug("Entering pipe mode")
   kv.open_command_line('!')
@@ -712,10 +719,6 @@ def do_pipe_prompt(kv, ret, widget):
 def do_search_prompt(kv, ret, widget):
   debug("Entering search mode")
   kv.open_command_line('/')
-
-def do_command_prompt(kv, ret, widget):
-  debug("Entering command mode")
-  kv.open_command_line(':')
 
 def handle_command(kv, prompt, command):
   debug("Handling command", prompt, command)
@@ -761,10 +764,6 @@ def do_open_help(kv, ret, widget):
     width=70, height=height)
 
 CURSES_HOOKS = {
-  ":" : {
-    "fn" : do_command_prompt,
-    "help" : "enter command mode",
-  },
   "/" : {
     "fn" : do_search_prompt,
     "help" : "enter interactive search"
@@ -795,11 +794,15 @@ CURSES_HOOKS = {
   },
   "g" : {
     "fn" : do_general,
-    "help" : "enter general mode"
+    "help" : ""
   },
   "G" : {
     "fn" : do_scroll_bottom,
     "help" : ""
+  },
+  "m" : {
+    "fn" : do_math,
+    "help" : "get the math on all numbers in the buffer"
   },
   "n" : {
     "fn" : do_next_search,
@@ -1657,6 +1660,99 @@ class Viewer(object):
     if type(msg) is str:
       msg = ('highlight', msg)
     self.pager.set_text(msg)
+
+  def summarize_math(self):
+    math_stats = defaultdict(lambda: defaultdict(int))
+    all_stats = defaultdict(int)
+
+    def initialize_stats(stats_dict):
+      stats_dict['min'] = sys.maxint
+      stats_dict['max'] = -sys.maxint + 1
+      stats_dict['vals'] = []
+
+    def update_stats(stats_dict, val):
+      stats_dict['count'] += 1
+      stats_dict['max'] = max(stats_dict['max'], val)
+      stats_dict['min'] = min(stats_dict['min'], val)
+      stats_dict['sum'] += val
+      stats_dict['vals'].append(val)
+
+    def finalize_stats(stats_dict):
+      if stats_dict['count'] is 0:
+        return False
+
+      mean = stats_dict['mean'] = stats_dict['sum'] / stats_dict['count']
+      stats_dict['vals'].sort()
+      error = 0
+      for val in stats_dict['vals']:
+        error += abs(mean - val) ** 2
+
+      error /= stats_dict['count']
+      std = math.sqrt(error)
+
+      stats_dict['big5'] = get_five(stats_dict)
+      stats_dict['std'] = std
+
+      return True
+
+    def get_five(stats_dict):
+      vals = stats_dict['vals']
+      length = len(vals)
+      return {
+        "5" : vals[int(length * 0.05)],
+        "25" : vals[int(length * 0.25)],
+        "50" : vals[int(length * 0.50)],
+        "75" : vals[int(length * 0.75)],
+        "95" : vals[int(length * 0.95)]
+      }
+
+    initialize_stats(all_stats)
+
+    for token in self.ret['tokens']:
+      try:
+        val = float(token['text'])
+      except ValueError, e:
+        continue
+
+      update_stats(all_stats, val)
+
+      # test the token to see if its numbery. if so... modify it
+
+
+    has_stats = finalize_stats(all_stats)
+
+    if not has_stats:
+      self.display_status_msg("No numbers found in buffer, can't math it up")
+      return
+
+    # Build an overlay that contains all this data...
+    listitems = [
+      urwid.Text("a radical, mathematical overview"),
+      urwid.Text("(make sure to double check these numbers :)"),
+      urwid.Text("") ]
+
+    for item in ['count', 'min', 'max', 'mean', 'std', 'sum']:
+      msg = str("%0.2f" % all_stats[item])
+      shortcut = urwid.Text([ " ", ('highlight', item)])
+      shortcut.align = "left"
+      help_msg = urwid.Text(msg + "  ")
+      help_msg.align = "right"
+      columns = urwid.Columns([ ("fixed", 10, shortcut), ("weight", 1, help_msg)])
+      listitems.append(columns)
+
+    listitems.append(urwid.Text(""))
+    for item in ['5', '25', '50', '75', '95']:
+      msg = str("%0.2f" % all_stats['big5'][item])
+      shortcut = urwid.Text([ " ", ('highlight', "p%s" % item)])
+      shortcut.align = "left"
+      help_msg = urwid.Text(msg + "  ")
+      help_msg.align = "right"
+      columns = urwid.Columns([ ("fixed", 10, shortcut), ("weight", 1, help_msg)])
+      listitems.append(columns)
+
+    listbox = TextBox(listitems)
+    self.window.open_overlay(urwid.LineBox(listbox),
+      width=70)
 
 def _run():
   kv = Viewer()
