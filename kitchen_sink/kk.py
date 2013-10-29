@@ -1450,7 +1450,7 @@ class Viewer(object):
     self.syntax_colored = True
     focused_index = self.get_focus_index(self.previous_widget)
 
-    formatter = UrwidFormatter()
+    formatter = UrwidFormatter(style='monokai')
     def handle_token(token, formatted_line, diff=False):
       text = token[1]
       if not text:
