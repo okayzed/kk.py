@@ -891,8 +891,8 @@ palette = [
   ('highlight', 'white', 'dark gray'),
   ('banner', 'black', 'white'),
   ('default', 'black', 'white'),
-  ('diff_add', 'white', 'light green'),
-  ('diff_del', 'white', 'light red'),
+  ('diff_add', 'white', 'dark green'),
+  ('diff_del', 'white', 'dark red'),
   ('streak', 'black', 'dark red'),
   ('bg', 'black', 'dark blue'),
 ]
