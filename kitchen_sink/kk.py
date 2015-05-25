@@ -107,6 +107,7 @@ if DEBUG:
 def debug(*args):
   if DEBUG:
     debugfile = open(__name__ + ".debug", "a")
+    print >> debugfile, time.time(),
     print >> debugfile, " ".join([str(i) for i in args])
     debugfile.close()
 
@@ -947,6 +948,9 @@ class Viewer(object):
 
     self.build_color_table()
 
+    self.chunk_size = 157
+    self.max_chunk_size = 2273
+
 
   def reset_line_stats(self):
     self.ret = {}
@@ -1285,8 +1289,12 @@ class Viewer(object):
       if self.quit:
         sys.exit(0)
 
-      if not index % 100:
+      if not index % self.chunk_size:
         wlines = self.escape_ansi_colors(append_lines, syntax_colored)
+
+        if self.chunk_size < self.max_chunk_size:
+          self.chunk_size *= 1.5
+
         for wline in wlines:
           if self.quit:
             sys.exit(0)
@@ -1313,9 +1321,11 @@ class Viewer(object):
 
       ret['joined'] = "".join(ret['lines'])
       self.update_pager()
+      debug("FINISHED READING AND DISPLAYING LINES")
 
 
   def read_and_display(self, lines=None):
+    debug("READ AND DISPLAY LINES")
     del self.walker[:]
 
     if self.ret:
@@ -1330,6 +1340,7 @@ class Viewer(object):
       resplit_lines = ["%s\n" % line for line in "".join(lines).split("\n")]
       resplit_lines[-1] = resplit_lines[-1].rstrip()
       lines = resplit_lines
+    debug("READ WHILE DISPLAYING")
     self.read_while_displaying_lines(lines)
 
   def restore_last_display(self):
