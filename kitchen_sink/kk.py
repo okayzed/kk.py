@@ -58,6 +58,7 @@ import traceback
 
 import pygments
 import pygments.formatters
+import pygments.lexers
 from urwidpygments import UrwidFormatter
 from pygments.lexers import guess_lexer
 # }}}
@@ -1562,8 +1563,9 @@ class Viewer(object):
         else:
           wlines.append(line)
 
-      # When we make it to the way end, put the last file contents in
-      add_lines_to_walker(wlines, walker, self.fname, diff=True)
+      if wlines:
+        # When we make it to the way end, put the last file contents in
+        add_lines_to_walker(wlines, walker, self.fname, diff=True)
 
       if cb:
         cb()
@@ -1596,7 +1598,11 @@ class Viewer(object):
           pass
 
         if not lexer:
-          lexer = guess_lexer(output)
+          try:
+              lexer = guess_lexer(output)
+          except Exception, e:
+              debug("EXCEPTION", e);
+              lexer = pygments.lexers.TextLexer()
 
         if diff and forced:
           self.syntax_lang = "git diff"

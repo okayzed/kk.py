@@ -109,7 +109,6 @@ class UrwidFormatter(Formatter):
               ttype = "Token.Other"
 
             while str(ttype) not in self.style_attrs:
-                debug(ttype)
                 tokens = str(ttype).split('.')
                 tokens.pop()
                 ttype = '.'.join(tokens)
