@@ -6,6 +6,8 @@ The Kitchen Sink Pager is a pager that does more.
 
 it's the last stop in your command pipe and rightfully so.
 
+
+
 Examples
 =========
 ::
@@ -30,6 +32,20 @@ Examples
     # if there are numbers in the buffer,
     # the kitchen sink math them with 'm'
     cat lots_of_numbers.txt | kk
+
+
+Screenshots
+-------------------
+
+
+KitchenSink syntax highlighting
+
+.. image:: https://raw.github.com/okayzed/kk.py/master/images/kk.png
+
+
+KitchenSink syntax highlighting vs. the traditional git diff highlighting
+
+.. image:: https://raw.github.com/okayzed/kk.py/master/images/kk_vs_less.png
 
 Why another pager?
 ------------------
