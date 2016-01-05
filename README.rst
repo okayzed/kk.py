@@ -7,6 +7,10 @@ The Kitchen Sink Pager is a pager that does more.
 it's the last stop in your command pipe and rightfully so.
 
 
+Installation
+============
+
+pip install KitchenSink
 
 Examples
 =========
