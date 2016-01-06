@@ -51,6 +51,19 @@ KitchenSink syntax highlighting vs. the traditional git diff highlighting
 
 .. image:: https://raw.github.com/okayzed/kk.py/master/images/kk_vs_less.png
 
+Changing Syntax Coloring
+------------------------
+
+if the syntax coloring style isn't your style or isn't showing up well, you can
+use any of pygments other available styles by setting KK_STYLE environment variable.
+
+    # listing the styles
+    python -c "import pygments.styles; print pygments.styles.STYLE_MAP.keys()"
+
+    # changing the style to vim. put this in .bashrc if you always want it
+    export KK_STYLE=vim
+
+
 Why another pager?
 ------------------
 

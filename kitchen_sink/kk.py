@@ -63,6 +63,11 @@ from urwidpygments import UrwidFormatter
 from pygments.lexers import guess_lexer
 # }}}
 
+PYGMENTS_STYLE='monokai'
+
+if 'KK_STYLE' in os.environ:
+    PYGMENTS_STYLE = os.environ['KK_STYLE']
+
 # {{{ util
 def consume(iterator, n):
   '''Advance the iterator n-steps ahead. If n is none, consume entirely.'''
@@ -111,6 +116,8 @@ def debug(*args):
     print >> debugfile, time.time(),
     print >> debugfile, " ".join([str(i) for i in args])
     debugfile.close()
+
+debug("USING STYLE", PYGMENTS_STYLE)
 
 # }}}
 
@@ -1462,7 +1469,7 @@ class Viewer(object):
     self.syntax_colored = True
     focused_index = self.get_focus_index(self.previous_widget)
 
-    formatter = UrwidFormatter(style='monokai')
+    formatter = UrwidFormatter(style=PYGMENTS_STYLE)
     def handle_token(token, formatted_line, diff=False):
       text = token[1]
       if not text:
