@@ -58,9 +58,11 @@ if the syntax coloring style isn't your style or isn't showing up well, you can
 use any of pygments other available styles by setting KK_STYLE environment variable.
 
     # listing the styles
+
     python -c "import pygments.styles; print pygments.styles.STYLE_MAP.keys()"
 
     # changing the style to vim. put this in .bashrc if you always want it
+
     export KK_STYLE=vim
 
 
