@@ -185,17 +185,20 @@ class DiffLine(urwid.Text):
 
         if list_like:
           if tokens[0] and tokens[0][1] == '-':
-            tokens[0] = ('diff_del', ' ')
-          if tokens[0] and tokens[0][1] == '+':
-            tokens[0] = ('diff_add', ' ')
+            tokens[0] = [('diff_del', ' ')]
+          elif tokens[0] and tokens[0][1] == '+':
+            tokens[0] = [('diff_add', ' ')]
+          elif tokens[0] and tokens[0][1][0] == '-':
+            tokens[0] = [('diff_del', ' '), tokens[0][1][1:]]
+          elif tokens[0] and tokens[0][1][0] == '+':
+            tokens[0] = [('diff_add', ' '), tokens[0][1][1:]]
 
 
-        elif type(token) is str:
+        elif type(token) is str or type(token) is unicode:
           if token == '-':
             tokens[0] = ('diff_del', ' ')
           if token == '+':
             tokens[0] = ('diff_add', ' ')
-
 
     except Exception, e:
       debug("DIFF LINE EXC: ", e)
