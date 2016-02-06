@@ -65,6 +65,9 @@ from pygments.lexers import guess_lexer
 
 PYGMENTS_STYLE='monokai'
 
+TAB_WIDTH = 2
+TAB_SPACES = TAB_WIDTH * " "
+
 if 'KK_STYLE' in os.environ:
     PYGMENTS_STYLE = os.environ['KK_STYLE']
 
@@ -81,6 +84,7 @@ backspace_re = re.compile('.\x08')
 def clear_escape_codes(line):
   # clear color codes
   line = backspace_re.sub('', line)
+  line = line.replace("\t", TAB_SPACES)
   if line.find('\033') == -1:
     return line
 
