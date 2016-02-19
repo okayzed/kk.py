@@ -84,7 +84,6 @@ backspace_re = re.compile('.\x08')
 def clear_escape_codes(line):
   # clear color codes
   line = backspace_re.sub('', line)
-  line = line.replace("\t", TAB_SPACES)
   if line.find('\033') == -1:
     return line
 
@@ -1298,6 +1297,7 @@ class Viewer(object):
     append_lines = []
     for line in gen:
       index += 1
+      line = line.replace("\t", TAB_SPACES)
       self.read_line(line, ret)
       append_lines.append(line)
 
