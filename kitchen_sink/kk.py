@@ -685,6 +685,10 @@ def do_scroll_bottom(kv, ret, widget):
   widget.original_widget.set_focus_valign("bottom")
   kv.readjust_display(widget.original_widget, len(widget.original_widget.body))
 
+def do_list(kv, ret, widget):
+  debug("Entering list mode")
+  setup_list_hooks()
+
 def do_general(kv, ret, widget):
   debug("Entering general mode")
   setup_general_hooks()
@@ -762,6 +766,10 @@ CURSES_HOOKS = {
     "fn" : do_syntax_coloring,
     "help" : "turn on syntax highlights"
   },
+  "l" : {
+    "fn" : do_list,
+    "help" : ""
+  },
   "g" : {
     "fn" : do_general,
     "help" : ""
@@ -798,22 +806,33 @@ CURSES_HOOKS = {
     "fn" : do_command_entered,
     "help" : ""
   },
-  "f" : {
-    "fn" : do_get_files,
-    "help" : "list the files in current buffer"
-  },
-  "u" : {
-    "fn" : do_get_urls,
-    "help" : "list the URLs in the current buffer"
-  },
-  "o" : {
-    "fn" : do_get_git_objects,
-    "help" : "list the git objects in the current buffer"
-  },
   "backspace" : {
     "fn" : do_pop_stack,
     "help" : "visit previously opened buffer"
   }
+}
+
+LIST_HOOKS = {
+    "?" : {
+      "fn" : do_open_help,
+      "help" : "Show this screen"
+    },
+    "f" : {
+      "fn" : do_get_files,
+      "help" : "list the files in current buffer"
+    },
+    "u" : {
+      "fn" : do_get_urls,
+      "help" : "list the URLs in the current buffer"
+    },
+    "o" : {
+      "fn" : do_get_git_objects,
+      "help" : "list the git objects in the current buffer"
+    },
+    "g" : {
+      "fn" : do_get_git_objects,
+      "help" : "list the git objects in the current buffer"
+    },
 }
 
 GENERAL_HOOKS = {
@@ -831,20 +850,27 @@ GENERAL_HOOKS = {
   },
 }
 
-for hook in GENERAL_HOOKS:
-  def build_replacement():
-    obj = GENERAL_HOOKS[hook]
+import itertools
 
-    def replacement(*args, **kwargs):
-      global _key_hooks
-      obj['oldfn'](*args, **kwargs)
-      _key_hooks = CURSES_HOOKS
+for hook_list in [GENERAL_HOOKS, LIST_HOOKS]:
+    for hook in hook_list:
+      def build_replacement():
+        obj = hook_list[hook]
 
-    obj['oldfn'] = obj['fn']
-    obj['fn'] = replacement
+        def replacement(*args, **kwargs):
+          global _key_hooks
+          obj['oldfn'](*args, **kwargs)
+          _key_hooks = CURSES_HOOKS
 
-  build_replacement()
+        obj['oldfn'] = obj['fn']
+        obj['fn'] = replacement
 
+      build_replacement()
+
+
+def setup_list_hooks():
+  global _key_hooks
+  _key_hooks = LIST_HOOKS
 
 def setup_general_hooks():
   global _key_hooks
@@ -980,7 +1006,7 @@ class Viewer(object):
 
       was_general = False
       # always switch back
-      if _key_hooks == GENERAL_HOOKS:
+      if _key_hooks == GENERAL_HOOKS or _key_hooks == LIST_HOOKS:
         was_general = True
 
 
