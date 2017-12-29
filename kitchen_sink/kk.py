@@ -315,6 +315,7 @@ class MenuOverlay(object):
     self.build_menu(*args, **kwargs)
     self.num_entries = 0
     self.entries = {}
+    self.entry_lookup = {}
     self.current_entry = ""
 
   def build_button(self, text, value):
@@ -369,9 +370,14 @@ class MenuOverlay(object):
     widget.open_overlay(self.linebox, modal_keys=modal_keys)
 
   def add_entry(self, entry):
+    if entry in self.entry_lookup:
+        return -1
+
     button = self.build_button(entry, entry)
     index = len(self.listbox.body)
     self.listbox.body.append(button)
+
+    self.entry_lookup[entry] = str(self.num_entries)
     self.entries[str(self.num_entries)] = entry
     self.num_entries += 1
     return index
@@ -420,6 +426,9 @@ def iterate_and_match_tokens_worker(kv, tokens, focused_line_no, func, overlay, 
       if ret:
         closeness = abs(focused_line_no - token['line'])
         token_index = overlay.add_entry(ret)
+        if token_index == -1:
+            continue
+
         if closeness < cur_closest_distance:
           cur_closest_distance = closeness
           closest_token = token_index
@@ -852,7 +861,7 @@ GENERAL_HOOKS = {
 
 import itertools
 
-for hook_list in [GENERAL_HOOKS, LIST_HOOKS]:
+for hook_list in [GENERAL_HOOKS]:
     for hook in hook_list:
       def build_replacement():
         obj = hook_list[hook]
@@ -1006,7 +1015,7 @@ class Viewer(object):
 
       was_general = False
       # always switch back
-      if _key_hooks == GENERAL_HOOKS or _key_hooks == LIST_HOOKS:
+      if _key_hooks == GENERAL_HOOKS:
         was_general = True
 
 
