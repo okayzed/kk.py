@@ -106,9 +106,10 @@ def add_vim_movement():
   for key in updatedMappings:
     urwid.command_map[key] = updatedMappings[key]
 
+from os import environ as ENV
 
-PROFILE=False
-DEBUG=True
+PROFILE="PROFILE" in ENV
+DEBUG="DEBUG" in ENV
 if DEBUG:
   debugfile = open(__name__ + ".debug", "w")
   debugfile.close()
