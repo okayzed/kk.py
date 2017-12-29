@@ -2,9 +2,8 @@
 Kitchen Sink Pager
 ==================
 
-The Kitchen Sink Pager is a pager that does more.
-
-it's the last stop in your command pipe and rightfully so.
+The Kitchen Sink Pager is a pager that does more, but its primary feature is
+adding per file syntax highlighting to git diffs.
 
 
 Installation
@@ -21,12 +20,12 @@ Examples
     cat some_file.py | kk
 
     # Use it as a quick file jumper for grep results.
-    # Press 'f' to quickly view a file in the current buffer
+    # Press 'lf' to quickly view a file in the current buffer
     grep * -Rn my_string | kk
 
     # Use it as a git log viewer.
-    # press 'o' to find all git [o]bjects
-    # press 'f' to find [f]iles.
+    # press 'lo' to [l]ist all git [o]bjects
+    # press 'lf' to [list] [f]iles in the buffer
     git log | kk
 
     # it does git diff highlighting, too
