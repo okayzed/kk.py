@@ -108,7 +108,7 @@ def add_vim_movement():
 
 
 PROFILE=False
-DEBUG=False
+DEBUG=True
 if DEBUG:
   debugfile = open(__name__ + ".debug", "w")
   debugfile.close()
@@ -542,7 +542,7 @@ def do_get_files(kv, ret, widget):
 
     while colon_text:
       if not colon_text + ":" + str(line_no) in visited:
-        visited[colon_text + str(line_no)] = True
+        visited[colon_text + ":" + str(line_no)] = True
         if check_file(colon_text, line_no):
           return colon_text + ":" + str(line_no)
 
@@ -654,39 +654,6 @@ def do_quit(kv, ret, scr):
 def do_pop_stack(kv, ret, scr):
   kv.restore_last_display()
 
-def do_edit_text(kv, ret, widget):
-  lines = get_content_from_editor(ret["joined"])
-  kv.read_and_display(lines)
-
-def do_diff_xsel(kv, ret, widget):
-  import difflib
-  lines = [clear_escape_codes(line) for line in kv.ret['lines']]
-  args = [ 'xsel' ]
-  compare = None
-
-  try:
-    p = subprocess.Popen(args, stdout=subprocess.PIPE)
-    compare = p.communicate()[0].strip()
-  except:
-    kv.display_status_msg(('diff_del', "xsel is required for diffing buffers"))
-
-
-  if compare:
-    compare_lines = [line + "\n" for line in compare.split("\n")]
-    comparison = difflib.unified_diff(
-      compare_lines, lines,
-      fromfile="clipboard", tofile="buffer")
-
-    compared = list(comparison)
-    if not len(compared):
-      compared = ["no difference between clipboard and buffer!"]
-    kv.read_and_display(compared)
-
-    kv.display_status_msg("displaying diff of the xsel buffer (before) and current buffer (after)")
-  else:
-    kv.display_status_msg("no diff, to speak of")
-
-
 def do_yank_text(kv, ret, widget):
   lines = [clear_escape_codes(line) for line in kv.ret['lines']]
 
@@ -726,10 +693,6 @@ def do_math(kv, ret, widget):
   debug("Entering math mode")
   kv.summarize_math()
 
-
-def do_pipe_prompt(kv, ret, widget):
-  debug("Entering pipe mode")
-  kv.open_command_line('!')
 
 def do_search_prompt(kv, ret, widget):
   debug("Entering search mode")
@@ -783,10 +746,6 @@ CURSES_HOOKS = {
     "fn" : do_search_prompt,
     "help" : "enter interactive search"
   },
-  "!" : {
-    "fn" : do_pipe_prompt,
-    "help" : "pipe current buffer through an external command"
-  },
   "Q" : {
     "fn" : do_close_overlay_or_quit,
     "help" : "quit the kitchen sink "
@@ -802,10 +761,6 @@ CURSES_HOOKS = {
   "s" : {
     "fn" : do_syntax_coloring,
     "help" : "turn on syntax highlights"
-  },
-  "e" : {
-    "fn" : do_edit_text,
-    "help" : "open the current text in $EDITOR"
   },
   "g" : {
     "fn" : do_general,
@@ -826,10 +781,6 @@ CURSES_HOOKS = {
   "N" : {
     "fn" : do_prev_search,
     "help" : ""
-  },
-  "d" : {
-    "fn" : do_diff_xsel,
-    "help" : "diff the current buffer with the X clipboard"
   },
   "y" : {
     "fn" : do_yank_text,
